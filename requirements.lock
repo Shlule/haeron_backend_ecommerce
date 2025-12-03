@@ -10,11 +10,55 @@
 #   universal: false
 
 -e file:.
+argon2-cffi==25.1.0
+    # via haeron-backend-ecommerce
+argon2-cffi-bindings==25.1.0
+    # via argon2-cffi
 asgiref==3.10.0
     # via django
-django==5.2.7
+    # via strawberry-graphql-django
+cffi==2.0.0
+    # via argon2-cffi-bindings
+django==5.2.8
+    # via django-choices-field
+    # via djangorestframework
+    # via djangorestframework-simplejwt
     # via haeron-backend-ecommerce
+    # via strawberry-graphql-django
+django-choices-field==3.1.1
+    # via haeron-backend-ecommerce
+djangorestframework==3.16.1
+    # via djangorestframework-simplejwt
+    # via haeron-backend-ecommerce
+djangorestframework-simplejwt==5.5.1
+    # via haeron-backend-ecommerce
+graphql-core==3.2.7
+    # via strawberry-graphql
+lia-web==0.2.3
+    # via strawberry-graphql
+packaging==25.0
+    # via strawberry-graphql
+psycopg2==2.9.11
+    # via haeron-backend-ecommerce
+pycparser==2.23
+    # via cffi
+pyjwt==2.10.1
+    # via djangorestframework-simplejwt
+python-dateutil==2.9.0.post0
+    # via strawberry-graphql
+python-decouple==3.8
+    # via haeron-backend-ecommerce
+six==1.17.0
+    # via python-dateutil
 sqlparse==0.5.3
     # via django
+strawberry-graphql==0.287.1
+    # via strawberry-graphql-django
+strawberry-graphql-django==0.67.2
+    # via haeron-backend-ecommerce
+typing-extensions==4.15.0
+    # via django-choices-field
+    # via lia-web
+    # via strawberry-graphql
 tzdata==2025.2
     # via django
