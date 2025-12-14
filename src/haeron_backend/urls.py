@@ -16,7 +16,11 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from rest_framework_simplejwt.views import TokenRefreshView
+from strawberry.django.views import GraphQLView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path("graphql/", GraphQLView.as_view(schema=schema, graphiql=True)),
+    path("api/token/resfresh/", TokenRefreshView.as_view(), name="token)refresh"),
 ]

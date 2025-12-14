@@ -19,6 +19,10 @@ asgiref==3.10.0
     # via strawberry-graphql-django
 cffi==2.0.0
     # via argon2-cffi-bindings
+click==8.3.1
+    # via uvicorn
+colorama==0.4.6
+    # via click
 django==5.2.8
     # via django-choices-field
     # via djangorestframework
@@ -34,6 +38,8 @@ djangorestframework-simplejwt==5.5.1
     # via haeron-backend-ecommerce
 graphql-core==3.2.7
     # via strawberry-graphql
+h11==0.16.0
+    # via uvicorn
 lia-web==0.2.3
     # via strawberry-graphql
 packaging==25.0
@@ -62,3 +68,5 @@ typing-extensions==4.15.0
     # via strawberry-graphql
 tzdata==2025.2
     # via django
+uvicorn==0.38.0
+    # via haeron-backend-ecommerce
