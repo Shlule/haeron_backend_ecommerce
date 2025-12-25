@@ -31,15 +31,18 @@ class PartModelOptionGQLType:
 
 
 @strawberry_django.type(models.PartModel)
-class PartModelGQLType: 
+class PartModelGQLType:
+    id: ID 
     name: str
     price: float
     part_type: PartTypeGQLType
     series: Optional["SeriesGQLType"]
+    code: str
 
 
 @strawberry_django.type(models.PartHistory)
 class PartHistoryGQLType:
+    id: ID
     event_type: str
     title: str
     description: str
@@ -49,11 +52,13 @@ class PartHistoryGQLType:
 
 
 @strawberry_django.type(models.Part)
-class PartGQLType: 
+class PartGQLType:
+    id: ID
     serial_number: str
     part_model: PartModelGQLType
     auth_key: str
     part_history: List["PartHistoryGQLType"]
+    is_master: bool
 
 
 @strawberry_django.type(models.InstrumentHistory)
@@ -67,16 +72,23 @@ class InstrumentHistoryGQLType:
     user: Optional["UserGQLType"]
 
 
+@strawberry_django.type(models.InstrumentType)
+class InstrumentTypeGQLType:
+    id:ID
+    code: str
+    name: str
+
+
 @strawberry_django.type(models.Instrument)
 class InstrumentGQLType:
     parts: List["PartGQLType"]
-    auth_key: str
     uid: UUID
-    serial_number: str
     owner: Optional["UserGQLType"]
+    master_part: "PartGQLType"
+    instrument_type: "InstrumentTypeGQLType"
 
     
-@strawberry_django.type(models.User)
+@strawberry_django.type(CustomUser)
 class UserGQLType:
     id: ID
     intruments: List["InstrumentGQLType"]

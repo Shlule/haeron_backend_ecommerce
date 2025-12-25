@@ -1,47 +1,55 @@
 from django.db import models
 import uuid
-from ..authUser.models import User
+from django.conf import settings
 
 
 class AuditMixin(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey("User", null=True, blank=True, on_delete=models.PROTECT, related_name="%(class)s_created")
-    updated_by = models.ForeignKey("User", null=True, blank=True, on_delete=models.PROTECT, related_name="%(class)s_updated")
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="%(class)s_created")
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="%(class)s_updated")
     
     class Meta:
         abstract = True
-    
+
+
 class InstrumentHistory(AuditMixin):
+    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     instrument = models.ForeignKey("Instrument", on_delete=models.CASCADE)
     event_type = models.CharField(max_length=100)
-    title = models.CharField(max_length=True)
+    title = models.CharField(max_length=100)
     description = models.TextField()
 
     class Meta: 
         ordering = ["-created_at"]
 
+
 class InstrumentType(models.Model):
+    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=50, unique=True)
-    code = models.CharField(max_length=50, unique=True)
+    code = models.CharField(max_length=10, unique=True)
     def __str__(self):
         return self.name
 
+
 class Instrument(AuditMixin):
-    owner = models.ForeignKey("User", blank=True, null=True, help_text="The owner actual of the instrusment")
-    serial_number = models.CharField(max_length=150, unique=True)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True, help_text="The owner actual of the instrusment", on_delete=models.SET_NULL)
     uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    parts = models.ForeignKey("Part", help_text="list of Part that a instruent is composed of.")
-    auth_key = models.TextField(blank=True, null=True, help_text="the public key of the instrument auth and set ownership")
+    parts = models.ForeignKey("Part", blank=True, null=True, help_text="list of Part that a instruent is composed of.", on_delete=models.PROTECT, related_name="instrument_parts")
+    master_part = models.OneToOneField("Part", on_delete=models.PROTECT, related_name="instrument_masterpart", limit_choices_to={"is_master": True},)
+    instrument_type = models.ForeignKey("InstrumentType", on_delete=models.PROTECT, related_name="instruments")
+
 
 class PartType(models.Model):
+    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=50, unique=True)
-    code = models.CharField(max_length=50, unique=True)
+    code = models.CharField(max_length=10, unique=True)
     def __str__(self):
         return self.name
     
 
 class PartModel(AuditMixin):
+    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100)
     part_type = models.ForeignKey("PartType", on_delete=models.PROTECT) 
     series = models.ForeignKey("Series", null=True, blank=True, on_delete=models.SET_NULL)
@@ -52,7 +60,9 @@ class PartModel(AuditMixin):
     def __str__(self):
         return f"{self.name} ({self.part_type.name})"
 
+
 class PartModelOption(AuditMixin):
+    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     part_model = models.ForeignKey("PartModel", on_delete=models.CASCADE)
     option = models.ForeignKey("Option", on_delete=models.CASCADE)
     price_delta = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
@@ -60,8 +70,10 @@ class PartModelOption(AuditMixin):
     class Meta: 
         unique_together = ("part_model","option")
 
+
 class PartHistory(AuditMixin):
-    part = models.ForeignKey("Part", on_delete=models.CASCADE)
+    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    part = models.ForeignKey("Part", on_delete=models.CASCADE, related_name="history")
     event_type = models.CharField(max_length=100)
     title = models.CharField(max_length=100) 
     description = models.TextField()
@@ -69,27 +81,39 @@ class PartHistory(AuditMixin):
     class Meta:
         ordering = ["-created_at"]
 
+
 class Part(AuditMixin):
-    owner = models.ForeignKey("User", blank=True, null=True, on_delete=models.SET_NULL)
+    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=models.SET_NULL)
     serial_number = models.CharField(max_length=150, unique=True)
     part_model = models.ForeignKey("PartModel", on_delete=models.PROTECT)
     auth_key = models.TextField()
-    part_history = models.ForeignKey("PartHistory", on_delete=models.PROTECT)
+    part_history = models.ForeignKey("PartHistory", on_delete=models.PROTECT, related_name="part_instance")
+    is_master = models.BooleanField(default=False)
 
 
 class Option(AuditMixin):
+    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100)
     description = models.TextField()
 
 
 class SerialCounter(models.Model):
+    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     key = models.CharField(max_length=150, unique=True)
     last_value = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
 
+class Series(models.Model):
+    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, unique=True)
+    code = models.CharField(max_length=10, unique=True)
+
+
 class Factory(models.Model):
-    code = models.CharField(max_length=5, unique=True)  # FR, JP, US
+    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(max_length=10, unique=True)
     name = models.CharField(max_length=100)
     city = models.CharField(max_length=100)
