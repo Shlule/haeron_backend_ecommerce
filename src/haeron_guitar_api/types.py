@@ -5,7 +5,40 @@ from uuid import UUID
 
 from . import models
 
+from authUser.models import User as CustomUser
 
+
+@strawberry_django.interface
+class AuditInterface: 
+    created_at: str
+    updated_at: str
+    created_by: Optional["UserGQLType"]
+    updated_by: Optional["UserGQLType"]
+
+
+@strawberry_django.type(models.Series)
+
+
+@strawberry_django.type(models.SerialCounter)
+class SerialCounterGQLType:
+    id: ID
+    key: str
+    last_value: int
+
+
+@strawberry_django.type(models.Series)
+class SeriesGQLType:
+    id:ID
+    code: str
+    name: str
+
+
+@strawberry_django.type(models.Factory)
+class FactoryGQLType:
+    id:ID
+    code: str
+    name: str
+    city: str
 
 
 @strawberry_django.type(models.Option)
@@ -15,11 +48,11 @@ class OptionGQLType:
     description: str
 
 
-
 @strawberry_django.type(models.PartType)
 class PartTypeGQLType:
     id: ID
     name: str
+    code: str
 
 
 @strawberry_django.type(models.PartModelOption)
