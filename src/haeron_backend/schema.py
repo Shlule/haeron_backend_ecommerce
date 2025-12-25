@@ -1,15 +1,15 @@
 import strawberry
 
-from src.authUser.schema import UserMutation, UserQuery
-from src.haeron_guitar_api.schema import ApiMutation, ApiQuery
+from authUser.schema import UserMutation, UserQuery
+from haeron_guitar_api.instruments.instrument_resolver import InstrumentMutation, InstrumentQuery
 
 
 @strawberry.type
-class Query(UserQuery, ApiQuery):
+class Query(UserQuery, InstrumentQuery):
     pass
 
 @strawberry.type
-class Mutation(UserMutation, ApiMutation):
+class Mutation(UserMutation, InstrumentMutation):
     pass
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)

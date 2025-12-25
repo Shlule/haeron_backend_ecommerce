@@ -101,4 +101,4 @@ class UserMutation:
         return True
     
 UserMutation = UserMutation
-UserQuery = UserQuer
+UserQuery = UserQuery

@@ -40,6 +40,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     "rest_framework",
     "rest_framework_simplejwt",
+    "authUser.apps.AuthuserConfig",
+    "haeron_guitar_api.apps.HaeronGuitarApiConfig",
 ]
 
 STRAWBERRY_DJANGO = {
@@ -73,7 +75,7 @@ SIMPLE_JWT = {
     "ALGORITHM": "HS256",
 }
 
-# AUTH_USER_MODEL = "authjwtTest.User"
+AUTH_USER_MODEL = "authUser.User"
 
 AUTHENTICATION_BACKENDS= [
     "django.contrib.auth.backends.ModelBackend",
