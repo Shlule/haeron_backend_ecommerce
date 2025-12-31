@@ -1,5 +1,4 @@
 import strawberry
-import strawberry_django
 from uuid import UUID
 from typing import List
 

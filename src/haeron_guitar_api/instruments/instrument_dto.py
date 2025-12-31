@@ -1,7 +1,7 @@
-from .instrument_input import *
 from dataclasses import dataclass
-import strawberry
- 
+from uuid import UUID
+from typing import Optional, List 
+
 @dataclass(slots=True)
 class CreateInstrumentDTO:
     instrument_type_id: UUID

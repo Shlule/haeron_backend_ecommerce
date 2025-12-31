@@ -1,8 +1,8 @@
-from ..models import Instrument, InstrumentType, Part
+from ..models import Instrument, Factory, Part
 from .instrument_dto import CreateInstrumentDTO
 
 def create_instrument(dto: CreateInstrumentDTO) -> Instrument:
-    instrument_type = InstrumentType.objects.get(pk=dto.instrument_type_id)
+    instrument_type = Factory.objects.get(pk=dto.instrument_type_id)
     master_part = Part.objects.get(pk=dto.master_part_id)
     parts = Part.objects.filter(pk__in=dto.parts_id)
 

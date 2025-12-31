@@ -38,7 +38,6 @@ class FactoryGQLType:
     id:ID
     code: str
     name: str
-    city: str
 
 
 @strawberry_django.type(models.Option)
@@ -107,6 +106,13 @@ class InstrumentHistoryGQLType:
 
 @strawberry_django.type(models.InstrumentType)
 class InstrumentTypeGQLType:
+    id:ID
+    code: str
+    name: str
+
+
+@strawberry_django.type(models.Factory)
+class FactoryGQLType:
     id:ID
     code: str
     name: str
