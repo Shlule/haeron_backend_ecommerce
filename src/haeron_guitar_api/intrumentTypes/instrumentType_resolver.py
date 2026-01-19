@@ -24,14 +24,25 @@ class InstrumentTypeQuery:
 class InstrumentTypeMutation:
     @strawberry.mutation
     def create_instrument_type(self, input: CreateInstrumentTypeInput) -> InstrumentTypeGQLType:
-        print("helloe")
         dto = CreateInstrumentTypeDTO(
             input.name,
             input.code,
         )
-        print(dto)
         instrument_type = InstrumentTypeService.create(dto)
         return instrument_type
     
+
+    # TODO - make some mutation to delete with name  or code  because they're unique see models
+    @strawberry.mutation
+    def delete_instrument_type(self, uuid: strawberry.ID) -> bool:
+        """
+        Supprime un InstrumentType. Retourne True si la suppression a réussi, False sinon.
+        """
+        qs = InstrumentType.objects.filter(uuid=uuid)
+        if qs.exists():
+            qs.delete()
+            return True
+        return False
+   
 InstrumentTypeQuery = InstrumentTypeQuery
 InstrumentTypeMutation = InstrumentTypeMutation

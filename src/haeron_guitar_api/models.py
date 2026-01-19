@@ -87,15 +87,14 @@ class Part(AuditMixin):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=models.SET_NULL)
     serial_number = models.CharField(max_length=150, unique=True)
     part_model = models.ForeignKey("PartModel", on_delete=models.PROTECT)
-    auth_key = models.TextField()
-    part_history = models.ForeignKey("PartHistory", on_delete=models.PROTECT, related_name="part_instance")
+    auth_key = models.CharField(max_length=200, unique=True)
     is_master = models.BooleanField(default=False)
 
 
 class Option(AuditMixin):
     uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100)
-    description = models.TextField()
+    description = models.TextField(null=True, blank=True)
 
 
 class SerialCounter(models.Model):
