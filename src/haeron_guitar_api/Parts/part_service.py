@@ -35,10 +35,10 @@ class PartService:
             part.auth_key = dto.auth_key
 
         if dto.part_model_id is not None:
-            part.part_model = get_object_or_404(PartModel, uid=dto.part_model_id)
+            part.part_model = get_object_or_404(PartModel, uuid=dto.part_model_id)
 
         if dto.owner_id is not None:
-            part.owner = get_object_or_404(User, uid=dto.owner_id)
+            part.owner = get_object_or_404(User, uuid=dto.owner_id)
 
         if dto.is_master is not None:
             part.is_master = dto.is_master
