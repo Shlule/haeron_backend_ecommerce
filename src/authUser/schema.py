@@ -4,6 +4,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
+from django.contrib.auth.password_validation import validate_password
 
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils.http import urlsafe_base64_decode
@@ -46,13 +47,18 @@ class UserMutation:
         except ValidationError as e:
             raise ValidationError("not valid email provided")
         
+        try:
+            validate_password(password, user=None)
+        except ValidationError as e:
+            raise Exception("Password too weak")
+        
         user = User(username=username, email=email)
         user.set_password(password)
         user.save()
 
         # OPTIONNEL : envoyer email de verification via allauth ou custom
         tokens = generate_tokens_for_user(user)
-        return TokenType(acess=tokens["access"], refresh=tokens["refresh"])
+        return TokenType(access=tokens["access"], refresh=tokens["refresh"])
     
     @strawberry.mutation
     def signin(self, info: Info, username: str, password:str) -> TokenType:
@@ -64,7 +70,7 @@ class UserMutation:
         # gérer un flow secondaire. Ici on retourne directement tokens.
 
         tokens = generate_tokens_for_user(user)
-        return TokenType(acess=tokens["access"], refresh=tokens["refresh"])
+        return TokenType(access=tokens["access"], refresh=tokens["refresh"])
 
     @strawberry.mutation
     def refresh_token(self, info: Info, refresh:str) -> TokenType: 
@@ -72,7 +78,7 @@ class UserMutation:
             token = RefreshToken(refresh)
             access = str(token.access_token)
             # optionally rotate
-            return TokenType(acess=access, refresh=refresh)
+            return TokenType(access=access, refresh=refresh)
         except Exception as e:
             raise Exception("Invalid refresh token")
             

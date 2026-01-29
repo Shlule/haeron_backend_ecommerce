@@ -7,9 +7,9 @@ from django.conf import settings
 
 User = get_user_model()
 
-def make_passord_reset(uid_user):
-    uid = urlsafe_base64_encode(force_bytes(uid_user.pk))
-    token = default_token_generator.make_token(uid_user)
+def make_passord_reset(user):
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    token = default_token_generator.make_token(user)
     return uid, token
 
 def send_password_reset_email(user, uid, token):

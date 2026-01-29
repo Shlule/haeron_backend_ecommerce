@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-import strawberry
 from uuid import UUID
 from decimal import Decimal
 from typing import List, Optional
@@ -9,7 +8,7 @@ class CreatePartModelDTO:
     name: str
     part_type_id: UUID
     series_id: Optional[UUID] = None
-    compatibles_options_ids = Optional[List[UUID]] = None
+    compatibles_options_ids: Optional[List[UUID]] = None
     price: Decimal = 0.0
     code: Optional[str] = None
 

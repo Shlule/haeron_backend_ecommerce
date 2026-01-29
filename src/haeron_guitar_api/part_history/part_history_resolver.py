@@ -6,7 +6,7 @@ from ..models import PartHistory
 from ..types import PartHistoryGQLType
 from .part_history_input import CreatePartHistoryInput, UpdatePartHistoryInput
 from .part_history_dto import CreatePartHistoryDTO, UpdatePartHistoryDTO
-from .part_history_resolver import PartHistoryService
+from .part_history_service import PartHistoryService
 
 @strawberry.type
 class PartHistoryQuery:
@@ -31,8 +31,8 @@ class PartHistoryMutation:
         return PartHistoryService.create(dto)
     
     @strawberry.mutation
-    def update_part_history(self, uuid: UUID, input:UpdatePartHistoryDTO) -> PartHistoryGQLType:
-        part_history = PartHistory.objects.get(uuid, uuid)
+    def update_part_history(self, uuid: UUID, input:UpdatePartHistoryInput) -> PartHistoryGQLType:
+        part_history = PartHistory.objects.get(uuid)
         dto = UpdatePartHistoryDTO(
             event_type=input.event_type,
             title=input.title,

@@ -14,7 +14,7 @@ class AuditMixin(models.Model):
 
 
 class InstrumentHistory(AuditMixin):
-    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     instrument = models.ForeignKey("Instrument", on_delete=models.CASCADE)
     event_type = models.CharField(max_length=100)
     title = models.CharField(max_length=100)
@@ -25,7 +25,7 @@ class InstrumentHistory(AuditMixin):
 
 
 class InstrumentType(models.Model):
-    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=50, unique=True)
     code = models.CharField(max_length=10, unique=True)
     def __str__(self):
@@ -34,14 +34,14 @@ class InstrumentType(models.Model):
 
 class Instrument(AuditMixin):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True, help_text="The owner actual of the instrusment", on_delete=models.SET_NULL)
-    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     parts = models.ForeignKey("Part", blank=True, null=True, help_text="list of Part that a instruent is composed of.", on_delete=models.PROTECT, related_name="instrument_parts")
     master_part = models.OneToOneField("Part", on_delete=models.PROTECT, related_name="instrument_masterpart", limit_choices_to={"is_master": True},)
     instrument_type = models.ForeignKey("InstrumentType", on_delete=models.PROTECT, related_name="instruments")
 
 
 class PartType(models.Model):
-    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=50, unique=True)
     code = models.CharField(max_length=10, unique=True)
     def __str__(self):
@@ -49,7 +49,7 @@ class PartType(models.Model):
     
 
 class PartModel(AuditMixin):
-    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100)
     part_type = models.ForeignKey("PartType", on_delete=models.PROTECT) 
     series = models.ForeignKey("Series", null=True, blank=True, on_delete=models.SET_NULL)
@@ -62,7 +62,7 @@ class PartModel(AuditMixin):
 
 
 class PartModelOption(AuditMixin):
-    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     part_model = models.ForeignKey("PartModel", on_delete=models.CASCADE)
     option = models.ForeignKey("Option", on_delete=models.CASCADE)
     price_delta = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
@@ -72,7 +72,7 @@ class PartModelOption(AuditMixin):
 
 
 class PartHistory(AuditMixin):
-    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     part = models.ForeignKey("Part", on_delete=models.CASCADE, related_name="history")
     event_type = models.CharField(max_length=100)
     title = models.CharField(max_length=100) 
@@ -83,7 +83,7 @@ class PartHistory(AuditMixin):
 
 
 class Part(AuditMixin):
-    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=models.SET_NULL)
     serial_number = models.CharField(max_length=150, unique=True)
     part_model = models.ForeignKey("PartModel", on_delete=models.PROTECT)
@@ -92,26 +92,30 @@ class Part(AuditMixin):
 
 
 class Option(AuditMixin):
-    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100)
     description = models.TextField(null=True, blank=True)
 
 
 class SerialCounter(models.Model):
-    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    key = models.CharField(max_length=150, unique=True)
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    factory = models.ForeignKey("Factory", on_delete=models.CASCADE)
+    date = models.DateField()
     last_value = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        unique_together = ("factory", "date")
+
 
 class Series(models.Model):
-    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True)
     code = models.CharField(max_length=10, unique=True)
 
 
 class Factory(models.Model):
-    uid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     code = models.CharField(max_length=10, unique=True)
     name = models.CharField(max_length=100)

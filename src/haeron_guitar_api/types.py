@@ -2,6 +2,7 @@ import strawberry_django
 from strawberry import ID
 from typing import Optional, List
 from uuid import UUID
+from datetime import date
 
 from . import models
 
@@ -16,47 +17,45 @@ class AuditInterface:
     updated_by: Optional["UserGQLType"]
 
 
-@strawberry_django.type(models.Series)
-
-
 @strawberry_django.type(models.SerialCounter)
 class SerialCounterGQLType:
-    id: ID
-    key: str
+    uuid: ID
+    factory: ID
+    date: date
     last_value: int
 
 
 @strawberry_django.type(models.Series)
 class SeriesGQLType:
-    id:ID
+    uuid:ID
     code: str
     name: str
 
 
 @strawberry_django.type(models.Factory)
 class FactoryGQLType:
-    id:ID
+    uuid:ID
     code: str
     name: str
 
 
 @strawberry_django.type(models.Option)
 class OptionGQLType: 
-    id: ID
+    uuid: ID
     name: str
     description: str
 
 
 @strawberry_django.type(models.PartType)
 class PartTypeGQLType:
-    id: ID
+    uuid: ID
     name: str
     code: str
 
 
 @strawberry_django.type(models.PartModelOption)
 class PartModelOptionGQLType:
-    id: ID
+    uuid: ID
     part_model: "PartModelGQLType"
     option: "OptionGQLType"
     price_delta = float
@@ -64,7 +63,7 @@ class PartModelOptionGQLType:
 
 @strawberry_django.type(models.PartModel)
 class PartModelGQLType:
-    id: ID 
+    uuid: ID 
     name: str
     price: float
     part_type: PartTypeGQLType
@@ -74,7 +73,7 @@ class PartModelGQLType:
 
 @strawberry_django.type(models.PartHistory)
 class PartHistoryGQLType:
-    id: ID
+    uuid: ID
     event_type: str
     title: str
     description: str
@@ -85,7 +84,7 @@ class PartHistoryGQLType:
 
 @strawberry_django.type(models.Part)
 class PartGQLType:
-    id: ID
+    uuid: ID
     serial_number: str
     part_model: PartModelGQLType
     auth_key: str
@@ -95,7 +94,7 @@ class PartGQLType:
 
 @strawberry_django.type(models.InstrumentHistory)
 class InstrumentHistoryGQLType: 
-    id: ID
+    uuid: ID
     instrument: "InstrumentGQLType"
     event_type: str
     title: str
@@ -106,14 +105,7 @@ class InstrumentHistoryGQLType:
 
 @strawberry_django.type(models.InstrumentType)
 class InstrumentTypeGQLType:
-    id:ID
-    code: str
-    name: str
-
-
-@strawberry_django.type(models.Factory)
-class FactoryGQLType:
-    id:ID
+    uuid:ID
     code: str
     name: str
 
@@ -121,7 +113,7 @@ class FactoryGQLType:
 @strawberry_django.type(models.Instrument)
 class InstrumentGQLType:
     parts: List["PartGQLType"]
-    uid: UUID
+    uuid: UUID
     owner: Optional["UserGQLType"]
     master_part: "PartGQLType"
     instrument_type: "InstrumentTypeGQLType"
@@ -129,7 +121,7 @@ class InstrumentGQLType:
     
 @strawberry_django.type(CustomUser)
 class UserGQLType:
-    id: ID
+    uuid: ID
     intruments: List["InstrumentGQLType"]
 
     

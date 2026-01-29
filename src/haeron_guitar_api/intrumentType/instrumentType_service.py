@@ -6,11 +6,13 @@ class InstrumentTypeService:
     @staticmethod
     def create(dto: CreateInstrumentTypeDTO) -> InstrumentType:
         try: 
-            instrument_type = InstrumentType.objects.create(
+            intrument_type = InstrumentType.objects.create(
                 name=dto.name,
                 code=dto.code
             )
-            
+
+            return intrument_type
+
         except IntegrityError as e:
             raise ValueError("InstrumentType with the same name or code already exists")
 

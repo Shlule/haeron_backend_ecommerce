@@ -6,4 +6,5 @@ from . import models
 @strawberry_django.type(models.User)
 class UserType:
     email: str
-    password: str
+    username: str
+    is_email_verified: bool

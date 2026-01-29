@@ -3,7 +3,7 @@ from uuid import UUID
 from decimal import Decimal
 from django.core.exceptions import ObjectDoesNotExist
 from ..models import PartModel, PartType, Series, Option, PartModelOption
-from part_model_dto import CreatePartModelDTO, UpdatePartModelDTO
+from .part_model_dto import CreatePartModelDTO, UpdatePartModelDTO
 
 class PartModelService:
 
