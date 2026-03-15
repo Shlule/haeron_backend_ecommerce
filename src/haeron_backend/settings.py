@@ -42,6 +42,9 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "authUser.apps.AuthuserConfig",
     "haeron_guitar_api.apps.HaeronGuitarApiConfig",
+    "allauth",
+    "allauth.account",
+    'django_filters',
 ]
 
 STRAWBERRY_DJANGO = {
@@ -57,6 +60,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
 ]
 
 REST_FRAMEWORK = {
@@ -82,16 +86,35 @@ AUTHENTICATION_BACKENDS= [
     "allauth.account.auth_backends.AuthenticationBackend",
 ]
 
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {'min_length': 10},
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+]
+
+ACCOUNT_LOGIN_METHODS = {'username','email'}
+ACCOUNT_UNIQUE_EMAIL = True
+ACCOUNT_CONFIRM_EMAIL_ON_GET = True
+ACCOUNT_LOGIN_ATTEMPTS_LIMIT = 5
+ACCOUNT_LOGIN_ATTEMPTS_TIMEOUT = 300
+ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+ACCOUNT_SIGNUP_FIELDS = ['username*', 'email*', 'email2*', 'password1*', 'password2*']
+ACCOUNT_CONFIRM_EMAIL_REDIRECT_URL = "https://localhost:3000/auth/login"
+
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 DEFAULT_FROM_EMAIL = "no-reply@example.com"
 
 SITE_ID=1
-ACCOUNT_EMAIL_REQUIRED = True
-ACCOUNT_USERNAME_REQUIRED = True
-ACCOUNT_AUTHENTICATION_METHOD = "usename"
-ACCOUNT_EMAIL_VERIFICATION = "optional"
-
-ROOT_URLCONF = 'mysite.urls'
 
 ROOT_URLCONF = 'haeron_backend.urls'
 

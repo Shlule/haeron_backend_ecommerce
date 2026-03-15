@@ -51,6 +51,7 @@ class PartTypeGQLType:
     uuid: ID
     name: str
     code: str
+    part_type: List["InstrumentTypeGQLType"]
 
 
 @strawberry_django.type(models.PartModelOption)

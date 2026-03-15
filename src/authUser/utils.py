@@ -4,6 +4,7 @@ from django.utils.encoding import force_bytes, force_str
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.conf import settings
+from rest_framework_simplejwt.tokens import RefreshToken
 
 User = get_user_model()
 
@@ -17,3 +18,12 @@ def send_password_reset_email(user, uid, token):
     subject = "Réinitialisation de votre mot de passe"
     message = f"Bonjour {user.username},\n\nUtilisez ce lien pour réinitialiser votre mot de passe : {reset_link}\n\nSi vous n'avez pas demandé cette réinitialisation, ignorez ce message."
     send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email])
+
+
+
+def generate_tokens_for_user(user):
+    refresh = RefreshToken.for_user(user)
+    return {
+        "access": str(refresh.access_token),
+        "refresh": str(refresh)
+    }

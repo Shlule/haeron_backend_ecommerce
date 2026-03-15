@@ -16,6 +16,7 @@ argon2-cffi-bindings==25.1.0
     # via argon2-cffi
 asgiref==3.10.0
     # via django
+    # via django-allauth
     # via strawberry-graphql-django
 cffi==2.0.0
     # via argon2-cffi-bindings
@@ -24,12 +25,18 @@ click==8.3.1
 colorama==0.4.6
     # via click
 django==5.2.8
+    # via django-allauth
     # via django-choices-field
+    # via django-filter
     # via djangorestframework
     # via djangorestframework-simplejwt
     # via haeron-backend-ecommerce
     # via strawberry-graphql-django
+django-allauth==65.14.0
+    # via haeron-backend-ecommerce
 django-choices-field==3.1.1
+    # via haeron-backend-ecommerce
+django-filter==25.2
     # via haeron-backend-ecommerce
 djangorestframework==3.16.1
     # via djangorestframework-simplejwt

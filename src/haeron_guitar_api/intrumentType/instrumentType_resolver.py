@@ -7,6 +7,8 @@ from ..models import InstrumentType
 from .instrumentType_dto import CreateInstrumentTypeDTO
 from .instrumentType_input import CreateInstrumentTypeInput
 from .instrumentType_service import InstrumentTypeService
+from ..permissions.authenticateJwt import IsAuthenticated
+from ..permissions.groupPermission import HasRoleFactory
 from ..types import InstrumentTypeGQLType
 
 @strawberry.type
@@ -22,7 +24,7 @@ class InstrumentTypeQuery:
 
 @strawberry.type
 class InstrumentTypeMutation:
-    @strawberry.mutation
+    @strawberry.mutation()
     def create_instrument_type(self, input: CreateInstrumentTypeInput) -> InstrumentTypeGQLType:
         dto = CreateInstrumentTypeDTO(
             input.name,

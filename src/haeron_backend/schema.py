@@ -13,9 +13,6 @@ from haeron_guitar_api.part_history.part_history_resolver import PartHistoryQuer
 from haeron_guitar_api.part.part_resolver import PartMutation, PartQuery
 from haeron_guitar_api.serial_counter.serial_counter_resolver import SerialCounterQuery,SerialCounterMutation
 
-
-
-
 @strawberry.type
 class Query(UserQuery,
             InstrumentQuery,
