@@ -28,18 +28,15 @@ class PartModelMutation:
             part_type_id=input.part_type_id,
             series_id=input.series_id,
             price=input.price,
-            compatible_options_id=input.compatibles_options_ids
         )
         return PartModelService.create(dto)
     
     @strawberry.mutation
     def update_part_model(self, uuid: UUID, input: UpdatePartModelInput) -> PartModelGQLType:
-        part_model = PartModel.objects.get(uuid = uuid)
         dto = UpdatePartModelDTO(
            name=input.name,
            part_type_id=input.part_type_id,
            series_id=input.series_id,
-           compatibles_options_ids=input.compatibles_options_ids,
            price=input.price,
            code=input.code,
         )

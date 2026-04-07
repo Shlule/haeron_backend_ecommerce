@@ -17,6 +17,7 @@ dependencies = [
     "uvicorn>=0.38.0",
     "django-allauth>=65.14.0",
     "django-filter>=25.2",
+    "django-cors-headers>=4.9.0",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"

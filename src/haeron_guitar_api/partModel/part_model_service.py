@@ -23,8 +23,8 @@ class PartModelService:
             
         part_model = PartModel.objects.create(
             name = dto.name,
-            part_type = dto.part_type_id,
-            series = dto.series_id,
+            part_type = part_type,
+            series = series,
             price = dto.price,
             code = dto.code
         )

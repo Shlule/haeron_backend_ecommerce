@@ -5,9 +5,10 @@ from typing import List
 from ..types import PartModelOptionGQLType
 from ..models import PartModelOption
 
-from .part_model_option_dto import CreatePartModelOptionDTO, UpdatePartModelOptionDTO
-from .part_model_option_input import CreatePartModelOptionInput, UpdatePartModelOptionInput
+from .part_model_option_dto import CreatePartModelOptionDTO, UpdatePartModelOptionPriceDTO
+from .part_model_option_input import CreatePartModelOptionInput, UpdatePartModelOptionPriceInput
 from .part_model_option_service import PartModelOptionService
+
 
 @strawberry.type
 class PartModelOptionQuery:
@@ -15,11 +16,11 @@ class PartModelOptionQuery:
     def partModelOption(self, uuid: UUID) -> PartModelOptionGQLType:
         part_model_option = PartModelOption.objects.get(pk=uuid)
         return part_model_option
-    
+
     @strawberry.field
     def get_all_part_model_options(self) -> List[PartModelOptionGQLType]:
         return PartModelOption.objects.all()
-    
+
 
 @strawberry.type
 class PartModelOptionMutation:
@@ -32,13 +33,10 @@ class PartModelOptionMutation:
         )
         part_model_option = PartModelOptionService.create(dto)
         return part_model_option
-    
+
     @strawberry.mutation
-    def update_price(self, input: UpdatePartModelOptionInput) -> PartModelOptionGQLType:
-        dto = UpdatePartModelOptionDTO(
-            uuid= input.uuid,
-            price_delta= input.price_delta
-        )
+    def update_price(self, input: UpdatePartModelOptionPriceInput) -> PartModelOptionGQLType:
+        dto = UpdatePartModelOptionPriceDTO(uuid=input.uuid, price_delta=input.price_delta)
         return PartModelOptionService.update_price(dto)
 
 
