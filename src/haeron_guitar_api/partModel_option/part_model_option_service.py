@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 from ..models import PartModelOption, PartModel, Option
-from .part_model_option_dto import CreatePartModelOptionDTO, UpdatePartModelOptionDTO
+from .part_model_option_dto import CreatePartModelOptionDTO, UpdatePartModelOptionPriceDTO
+
 
 class PartModelOptionService:
     @staticmethod
@@ -14,25 +15,18 @@ class PartModelOptionService:
         if not option:
             raise ValidationError("Option not found")
 
-        if PartModelOption.objects.filter(
-            part_model=part_model,
-            option=option
-        ).exists():
+        if PartModelOption.objects.filter(part_model=part_model, option=option).exists():
             raise ValidationError("Option already linked to this PartModel")
 
-        return PartModelOption.objects.create(
-            part_model=part_model,
-            option=option,
-            price_delta=dto.price_delta
-        )
+        return PartModelOption.objects.create(part_model=part_model, option=option, price_delta=dto.price_delta)
 
     @staticmethod
-    def update_price(dto: UpdatePartModelOptionDTO) -> PartModelOption:
-        pmo = PartModelOption.objects.filter(pk= dto.uuid).first()
+    def update_price(dto: UpdatePartModelOptionPriceDTO) -> PartModelOption:
+        pmo = PartModelOption.objects.filter(pk=dto.uuid).first()
         if not pmo:
             raise ValidationError("PartModelOption not found")
-            
-        if dto.price_delta is not None: 
+
+        if dto.price_delta is not None:
             pmo.price_delta = dto.price_delta
 
         pmo.save()

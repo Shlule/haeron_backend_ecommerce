@@ -1,11 +1,13 @@
 import strawberry
 from uuid import UUID
-from typing import List
+from typing import List, Optional
 
 from ..models import Option
 from .option_dto import CreateOptionDTO
-from .option_input import CreateOptionInput
+from .option_input import CreateOptionInput, OptionFilterInput
 from .option_service import OptionService
+from .option_filter import OptionFilterSet
+
 
 from ..types import OptionGQLType
 
@@ -13,9 +15,12 @@ from ..types import OptionGQLType
 @strawberry.type
 class OptionQuery:
     @strawberry.field
-    def options(self, uuid: UUID) -> OptionGQLType:
-        option = Option.objects.get(pk=uuid)
-        return option
+    def options(self, filters: Optional[OptionFilterInput] = None) -> OptionGQLType:
+        qs = Option.objects.all()
+        if filters:
+            filter_dict = {k: v for k, v in filters.__dict__.items() if v is not None}
+            qs = OptionFilterSet(filter_dict, queryset=qs).qs
+        return qs
 
 
 @strawberry.type
