@@ -70,3 +70,68 @@ class PartTypeGQLTest(TestCase):
     def test_get_part_type_unique_code(self):
         with self.assertRaises(IntegrityError):
             PartType.objects.create(name="ahah", code="BDY")
+
+    def test_adding_instruments_type(self):
+        instrumentType3 = InstrumentType.objects.create(name="ahah", code="ohoh")
+        instrumentType4 = InstrumentType.objects.create(name="caca", code="prout")
+
+        query_p = """
+        mutation($part_type_id: UUID!, $instrument_types_ids: [UUID!]! ){
+            addPartTypeInstrumentTypeConnec(partTypeId: $part_type_id, instrumentTypeIds: $instrument_types_ids)
+        }
+"""
+        response = self.client.query(
+            query_p,
+            variables={
+                "part_type_id": str(self.partType1.uuid),
+                "instrument_types_ids": [instrumentType3.uuid, instrumentType4.uuid],
+            },
+        )
+        self.assertEqual(response.data["addPartTypeInstrumentTypeConnec"], True)
+
+        query_p_deux = """
+                query($id: String!){
+                    partTypes(filters:{id: $id}){
+                        instrumentTypes{
+                            name
+                            code
+                        }
+                    }
+                }
+        """
+        response_deux = self.client.query(query_p_deux, variables={"id": str(self.partType1.uuid)})
+        self.assertIsNone(response_deux.errors)
+        self.assertEqual(len(response_deux.data["partTypes"][0]["instrumentTypes"]), 3)
+
+    def test_remove_instruments_type(self):
+        instrumentType3 = InstrumentType.objects.create(name="ahah", code="ohoh")
+        instrumentType4 = InstrumentType.objects.create(name="prout", code="caca")
+
+        self.partType1.instrument_types.add(instrumentType3, instrumentType4)
+        query_p = """
+        mutation($part_type_id: UUID!, $instrument_types_ids: [UUID!]! ){
+            rmPartTypeInstrumentTypeConnec(partTypeId: $part_type_id, instrumentTypeIds: $instrument_types_ids)
+        }
+"""
+        response = self.client.query(
+            query_p,
+            variables={
+                "part_type_id": str(self.partType1.uuid),
+                "instrument_types_ids": [instrumentType3.uuid, instrumentType4.uuid],
+            },
+        )
+        self.assertEqual(response.data["rmPartTypeInstrumentTypeConnec"], True)
+
+        query_p_deux = """
+                query($id: String!){
+                    partTypes(filters:{id: $id}){
+                        instrumentTypes{
+                            name
+                            code
+                        }
+                    }
+                }
+        """
+        response_deux = self.client.query(query_p_deux, variables={"id": str(self.partType1.uuid)})
+        self.assertIsNone(response_deux.errors)
+        self.assertEqual(len(response_deux.data["partTypes"][0]["instrumentTypes"]), 1)

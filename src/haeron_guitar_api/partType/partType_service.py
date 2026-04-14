@@ -18,8 +18,7 @@ class PartTypeService:
 
     @staticmethod
     def add_instruments_types(part_type_id: UUID, instrument_types_ids: List[UUID]) -> bool:
-        print("%" * 50)
-        print("je suis dans le service")
+
         try:
             part_type = PartType.objects.get(pk=part_type_id)
         except PartType.DoesNotExist:
