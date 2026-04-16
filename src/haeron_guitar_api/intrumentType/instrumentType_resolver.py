@@ -1,11 +1,12 @@
 import strawberry
 from uuid import UUID
-from typing import List
+from typing import List, Optional
 
 from ..models import InstrumentType
 
 from .instrumentType_dto import CreateInstrumentTypeDTO
-from .instrumentType_input import CreateInstrumentTypeInput
+from .instrumentType_input import CreateInstrumentTypeInput, InstrumentTypeFilterInput
+from .instrumentType_filter import InstrumentTypeFilterSet
 from .instrumentType_service import InstrumentTypeService
 from ..permissions.authenticateJwt import IsAuthenticated
 from ..permissions.groupPermission import HasRoleFactory
@@ -22,6 +23,14 @@ class InstrumentTypeQuery:
     @strawberry.field
     def get_all_instrument_type(self) -> List[InstrumentTypeGQLType]:
         return InstrumentType.objects.all()
+
+    @strawberry.field
+    def instrument_types(self, filters: Optional[InstrumentTypeFilterInput] = None) -> List[InstrumentTypeGQLType]:
+        qs = InstrumentType.objects.all()
+        if filters:
+            filter_dict = {k: v for k, v in filters.__dict__.items() if v is not None}
+            qs = InstrumentTypeFilterSet(filter_dict, queryset=qs).qs
+        return qs
 
 
 @strawberry.type

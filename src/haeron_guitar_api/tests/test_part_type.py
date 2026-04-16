@@ -63,15 +63,15 @@ class PartTypeGQLTest(TestCase):
         self.assertIsNone(response.errors)
         self.assertEqual(response.data["partTypes"][0]["code"], "BDY")
 
-    def test_get_part_type_unique_name(self):
+    def test_part_type_unique_name(self):
         with self.assertRaises(IntegrityError):
             PartType.objects.create(name="body", code="lolo")
 
-    def test_get_part_type_unique_code(self):
+    def test_part_type_unique_code(self):
         with self.assertRaises(IntegrityError):
             PartType.objects.create(name="ahah", code="BDY")
 
-    def test_adding_instruments_type(self):
+    def test_adding_instrument_types(self):
         instrumentType3 = InstrumentType.objects.create(name="ahah", code="ohoh")
         instrumentType4 = InstrumentType.objects.create(name="caca", code="prout")
 
@@ -103,7 +103,7 @@ class PartTypeGQLTest(TestCase):
         self.assertIsNone(response_deux.errors)
         self.assertEqual(len(response_deux.data["partTypes"][0]["instrumentTypes"]), 3)
 
-    def test_remove_instruments_type(self):
+    def test_remove_instrument_types(self):
         instrumentType3 = InstrumentType.objects.create(name="ahah", code="ohoh")
         instrumentType4 = InstrumentType.objects.create(name="prout", code="caca")
 
