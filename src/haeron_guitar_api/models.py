@@ -88,7 +88,7 @@ class PartModel(AuditMixin):
 class PartModelOption(AuditMixin):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=100, null=True, blank=True)
+    code = models.CharField(max_length=100)
     part_model = models.ForeignKey("PartModel", on_delete=models.CASCADE)
     option = models.ForeignKey("Option", on_delete=models.CASCADE)
     price_delta = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
@@ -146,3 +146,39 @@ class Factory(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     code = models.CharField(max_length=10, unique=True)
     name = models.CharField(max_length=100)
+
+
+class Product(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+
+
+class Cart(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.CASCADE)
+    session_key = models.CharField(max_length=255, null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    last_activity_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+
+
+class CartItem(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    cart = models.ForeignKey("Cart", blank=True, related_name="cart_items", null=True, on_delete=models.CASCADE)
+    product = models.ForeignKey("Product", blank=True, null=True, on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField(default=1)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    created_at = models.DateField(auto_now_add=True)
+    config_snapshot = models.JSONField(default=dict)
+    config_hash = models.CharField(max_length=64, db_index=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["cart", "config_hash"], name="uniq_cartItem_config")]
+
+
+class CartItemOption(models.Model):
+    cart_item = models.ForeignKey("CartItem", related_name="cart_item_options", on_delete=models.CASCADE)
+    option = models.ForeignKey("PartModelOption", on_delete=models.CASCADE)
+    price_delta = models.DecimalField(max_digits=10, decimal_places=2)

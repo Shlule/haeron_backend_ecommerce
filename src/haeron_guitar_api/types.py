@@ -128,3 +128,39 @@ class InstrumentGQLType:
 class UserGQLType:
     uuid: ID
     intruments: List["InstrumentGQLType"]
+
+
+@strawberry_django.type(models.Cart)
+class CartGQLType:
+    uuid: ID
+    user: "UserGQLType"
+    session_key: str
+    expires_at: date
+    last_activity_at: date
+    create_at: date
+    is_active: bool
+
+
+@strawberry_django.type(models.CartItem)
+class CartItemGQLType:
+    uuid: ID
+    cart: "CartGQLType"
+    product: "ProductGQLType"
+    quantity: int
+    unit_price: float
+    configuration_snapshot: dict
+
+
+@strawberry_django.type(models.CartItemOption)
+class CartItemOptionGQLType:
+    uuid: ID
+    option = "PartModelOptionGQLType"
+    price_delta: float
+
+
+@strawberry_django.type(models.Product)
+class ProductGQLType:
+    uuid: ID
+    name: str
+    price: float
+    part_model: "PartModelGQLType"
