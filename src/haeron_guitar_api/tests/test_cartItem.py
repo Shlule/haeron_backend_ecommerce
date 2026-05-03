@@ -1,12 +1,11 @@
-from itertools import product
+import json
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from uuid import uuid4
 
-from ..models import CartItem, Cart, Product
+from ..models import CartItem, Cart, Product, ProductType, PartModel, PartType, PartModelOption, Option
 from ..cartItem.cartItem_service import CartItemService, CartItemFactory, ConfigHashService
-from ..cartItem.cartItem_utils import CartItemConfigResolver
 from ..cartItem.cartItem_dto import createCartItemDTO
 
 User = get_user_model()
@@ -16,11 +15,16 @@ class CartItemServiceTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="test")
         self.cart = Cart.objects.create(user=self.user, is_active=True)
-        self.product = Product.objects.create(name="Guitar Custom", price=100)
+        self.product_type = ProductType.objects.create(code="custom_piece")
+        self.product = Product.objects.create(name="Guitar Custom", price=100, product_type=self.product_type)
 
     # SECTION - adding quantity
     def test_add_item_success(self):
-        dto = createCartItemDTO(cart_id=self.cart.uuid, product_id=self.product.uuid, quantity=2)
+        dto = createCartItemDTO(
+            cart_id=self.cart.uuid,
+            product_id=self.product.uuid,
+            quantity=2,
+        )
         item = CartItemService.add_item(dto)
 
         self.assertEqual(item.quantity, 2)
@@ -30,7 +34,11 @@ class CartItemServiceTest(TestCase):
 
     def test_add_item_invalide_quantity(self):
 
-        dto = createCartItemDTO(cart_id=self.cart.uuid, product_id=self.product.uuid, quantity=0)
+        dto = createCartItemDTO(
+            cart_id=self.cart.uuid,
+            product_id=self.product.uuid,
+            quantity=0,
+        )
 
         with self.assertRaises(ValidationError):
             CartItemService.add_item(dto)
@@ -44,16 +52,44 @@ class CartItemServiceTest(TestCase):
         self.assertEqual(item.quantity, 2)
         self.assertEqual(CartItem.objects.count(), 1)
 
-    def test_add_item_config_agregation(self):
-        dto1 = createCartItemDTO(cart_id=self.cart.uuid, product_id=self.product.uuid, quantity=1)
+    def test_add_same_item_twice_with_config(self):
+        # TODO -  make the creat
+        option = Option.objects.create(name="color")
+        part_type = PartType.objects.create(name="superior body", code="SB")
+        part_model = PartModel.objects.create(name="starLight", code="STR", price=100.00, part_type=part_type)
+        part_model_option1 = PartModelOption.objects.create(
+            name="bleu irridescent", code="bleu", part_model=part_model, option=option, price_delta=50
+        )
+        part_model_option2 = PartModelOption.objects.create(
+            name="rouge vermillion", code="rouge", part_model=part_model, option=option, price_delta=20
+        )
+
+        dto1 = createCartItemDTO(
+            cart_id=self.cart.uuid,
+            product_id=self.product.uuid,
+            quantity=1,
+            configuration={
+                "part_model_id": str(part_model.uuid),
+                "part_model_option_ids": [str(part_model_option1.uuid), str(part_model_option2.uuid)],
+            },
+        )
         dto2 = createCartItemDTO(
-            cart_id=self.cart.uuid, product_id=self.product.uuid, quantity=1, part_model_id=uuid4()
+            cart_id=self.cart.uuid,
+            product_id=self.product.uuid,
+            quantity=1,
+            configuration={
+                "part_model_id": str(part_model.uuid),
+                "part_model_option_ids": [str(part_model_option1.uuid), str(part_model_option2.uuid)],
+            },
         )
 
         CartItemService.add_item(dto1)
-        CartItemService.add_item(dto2)
+        item = CartItemService.add_item(dto2)
 
-        self.assertEqual(CartItem.objects.count(), 2)
+        self.assertEqual(CartItem.objects.count(), 1)
+        self.assertEqual(item.quantity, 2)
+        # don't forget the product cost taht is 100 . so 100 + 100 +50+20
+        self.assertEqual(item.unit_price, 270)
 
     #!SECTION
 
@@ -68,7 +104,12 @@ class CartItemServiceTest(TestCase):
 
     def test_update_quantity_to_zero_delete(self):
         item = CartItem.objects.create(
-            cart=self.cart, product=self.product, quantity=1, unit_price=100, config_hash="abs", config_snapshot={}
+            cart=self.cart,
+            product=self.product,
+            quantity=1,
+            unit_price=100,
+            config_hash="abs",
+            config_snapshot={},
         )
         result = CartItemService.update_quantity(item.uuid, 0)
 
@@ -117,33 +158,6 @@ class CartItemServiceTest(TestCase):
 
     #!SECTION
 
-    # SECTION - advanced and linked test
-    # def test_add_item_with_options_and_price_delta(self):
-    #     option = Option.objects.create(name="color")
-    #     part_model = PartModel.objects.create()
-    #     part_model_option = PartModelOption.objects.create(
-    #         name="blue_irridescent", part_model_id=uuid4(), code="BI", option=option, price_delta=50
-    #     )
-
-    #     dto = createCartItemDTO(
-    #         cart_id=self.cart.uuid,
-    #         product_id=self.product.uuid,
-    #         quantity=1,
-    #         part_model_option_ids=[part_model_option.uuid],
-    #     )
-
-    #     item = CartItemService.add_item(dto)
-
-    #     self.assertEqual(item.unit_price, 150)
-
-    #     self.assertEqual(len(item.config_snapshot["options"]), 1)
-
-    #     option_snapshot = item.config_snapshot["options"][0]
-
-    #     self.assertEqual(option_snapshot["name"], "color")
-    #     self.assertEqual(option_snapshot["value"], "blue_irridescent")
-    #     self.assertEqual(option_snapshot["price_delta"], 50.0)
-
     def test_hash_is_stable(self):
         snapshot = [{"a": 1}, {"b": 2}]
 
@@ -163,22 +177,3 @@ class CartItemServiceTest(TestCase):
         )
 
         self.assertEqual(item.quantity, 1)
-
-    # TODO Finir les test unitaire et verifeir le comportement de la config
-
-    def test_price_calculation_only(self):
-        product_price = 100
-        options = [{"name": "color", "value": "blue", "price_delta": 50}]
-        total, snapshot = CartItemConfigResolver.resolve(product_price, options)
-        self.assertEqual(total, 150)
-
-    def test_config_snapshot_agregation(self):
-        product_price = 100
-        options = [
-            {"name": "color", "value": "blue", "price_delta": 50},
-            {"name": "Materiaux", "value": "bois", "price_delta": 20},
-        ]
-        total, snapshot = CartItemConfigResolver.resolve(product_price, options)
-
-        cartItem = CartItemService.add_item()
-        self.assertEqual(total, 170)

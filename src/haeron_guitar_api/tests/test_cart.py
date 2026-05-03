@@ -3,7 +3,7 @@ from pprint import pprint
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 
-from ..models import Cart, CartItem, Product
+from ..models import Cart, CartItem, Product, ProductType
 from ..cart.cart_service import CartService
 from ..cart.cart_dto import CreateCartDTO
 
@@ -13,7 +13,8 @@ User = get_user_model()
 class CartServiceTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="user1")
-        self.product = Product.objects.create(name="Custom Guitar", price=100)
+        self.product_type = ProductType.objects.create(code="custom_piece")
+        self.product = Product.objects.create(name="Custom Guitar", price=100, product_type=self.product_type)
 
     def test_create_guest_cart(self):
         dto = CreateCartDTO(session_key="abc")

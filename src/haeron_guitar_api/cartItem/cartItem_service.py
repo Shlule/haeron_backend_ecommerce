@@ -1,7 +1,8 @@
+from tracemalloc import Snapshot
 from django.forms import ValidationError
 from .cartItem_dto import createCartItemDTO
-from .cartItem_utils import CartItemConfigResolver
 from django.db import transaction
+from ..product_type.product_type_registry import ProductTypeHandlerRegistry
 from ..models import CartItem, Cart, Product, PartModel, PartModelOption
 import hashlib
 import json
@@ -42,11 +43,20 @@ class CartItemService:
         if dto.quantity <= 0:
             raise ValidationError("Quantity must be greater than 0")
 
+        product = Product.objects.select_related("product_type").get(pk=dto.product_id)
+        product_type_code = product.product_type.code
         cart = Cart.objects.get(uuid=dto.cart_id, is_active=True)
-        product = Product.objects.get(uuid=dto.product_id)
+        total_price = product.price
+        snapshot = {}
+        if dto.configuration:
+            handler = ProductTypeHandlerRegistry.get_handler(product_type_code)
+            if not handler:
+                raise ValueError("No handler exist for this product type")
 
-        options = PartModelOption.objects.filter(pk__in=dto.part_model_option_ids or [])
-        total_price, snapshot = CartItemConfigResolver.resolve(product.price, options)
+            validated_data = handler.validate(dto.configuration)
+
+            snapshot = handler.build_snapshot(validated_data)
+            total_price += handler.calculate_price(validated_data)
 
         config_hash = ConfigHashService.generate(snapshot)
 

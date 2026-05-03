@@ -1,13 +1,12 @@
 from dataclasses import dataclass
 from typing import Optional
 from uuid import UUID
+from typing import Dict, Any
 
 
 @dataclass
 class createCartItemDTO:
     cart_id: UUID
     product_id: UUID
+    configuration: Optional[Dict[str, Any]] = None
     quantity: int = 1
-
-    part_model_id: Optional[UUID] = None
-    part_model_option_ids: Optional[UUID] = None
