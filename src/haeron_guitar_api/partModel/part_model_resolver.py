@@ -3,20 +3,22 @@ from uuid import UUID
 from typing import List
 
 from ..models import PartModel
-from ..types import PartModelGQLType
+from ..types.types import PartModelGQLType
 from .part_model_input import CreatePartModelInput, UpdatePartModelInput
 from .part_model_dto import CreatePartModelDTO, UpdatePartModelDTO
 from .part_model_service import PartModelService
+
 
 @strawberry.type
 class PartModelQuery:
     @strawberry.field
     def get_part_model(self, uuid: UUID) -> PartModelGQLType:
         return PartModel.objects.get(uuid)
-    
+
     @strawberry.field
     def get_all_part_model(self) -> List[PartModelGQLType]:
         return PartModel.objects.all()
+
 
 @strawberry.type
 class PartModelMutation:
@@ -30,17 +32,18 @@ class PartModelMutation:
             price=input.price,
         )
         return PartModelService.create(dto)
-    
+
     @strawberry.mutation
     def update_part_model(self, uuid: UUID, input: UpdatePartModelInput) -> PartModelGQLType:
         dto = UpdatePartModelDTO(
-           name=input.name,
-           part_type_id=input.part_type_id,
-           series_id=input.series_id,
-           price=input.price,
-           code=input.code,
+            name=input.name,
+            part_type_id=input.part_type_id,
+            series_id=input.series_id,
+            price=input.price,
+            code=input.code,
         )
         return PartModelService.update(dto)
-    
+
+
 PartModelQuery = PartModelQuery
 PartModelMutation = PartModelMutation

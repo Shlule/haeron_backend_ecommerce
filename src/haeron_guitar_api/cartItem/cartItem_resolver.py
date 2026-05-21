@@ -8,7 +8,7 @@ from .cartItem_input import CreateCartItemsInput, CartItemFilterInput
 from .cartItem_filter import CartItemFilterSet
 from ..models import CartItem
 
-from ..types import CartItemGQLType
+from ..types.types import CartItemGQLType
 
 
 @strawberry.type

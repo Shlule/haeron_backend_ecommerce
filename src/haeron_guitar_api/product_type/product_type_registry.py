@@ -1,13 +1,14 @@
 class ProductTypeHandlerRegistry:
-    _handlers = {}
+    _registry = {}
 
     @classmethod
-    def register(cls, product_type, handler):
-        cls._handlers[product_type] = handler
+    def register(cls, product_type_code):
+        def decorator(handler_cls):
+            cls._registry[product_type_code] = handler_cls()
+            return handler_cls
+
+        return decorator
 
     @classmethod
-    def get_handler(cls, product_type):
-        handler = cls._handlers.get(product_type)
-        if not handler:
-            raise ValueError(f"No handler for type {product_type}")
-        return handler()
+    def get_handler(cls, product_type_code):
+        return cls._registry.get(product_type_code)

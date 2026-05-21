@@ -6,7 +6,7 @@ from .serial_counter_input import SerialCounterFilterInput
 from .serial_counter_filter import SerialCounterFilterSet
 
 from ..models import SerialCounter
-from ..types import SerialCounterGQLType
+from ..types.types import SerialCounterGQLType
 
 
 @strawberry.type

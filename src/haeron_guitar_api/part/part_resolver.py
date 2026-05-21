@@ -3,7 +3,7 @@ from uuid import UUID
 from typing import List
 
 from ..models import Part
-from ..types import PartGQLType
+from ..types.types import PartGQLType
 from .part_input import CreatePartInput, UpdatePartInput
 from .part_dto import CreatePartDTO, UpdatePartDTO
 from .part_service import PartService

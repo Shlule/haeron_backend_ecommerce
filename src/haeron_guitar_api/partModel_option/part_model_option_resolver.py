@@ -3,7 +3,7 @@ import strawberry
 from uuid import UUID
 from typing import List
 
-from ..types import PartModelOptionGQLType
+from ..types.types import PartModelOptionGQLType
 from ..models import PartModelOption
 
 from .part_model_option_dto import CreatePartModelOptionDTO, UpdatePartModelOptionPriceDTO

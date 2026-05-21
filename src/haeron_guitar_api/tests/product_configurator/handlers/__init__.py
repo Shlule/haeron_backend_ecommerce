@@ -1,0 +1,8 @@
+import haeron_guitar_api.product_component.handlers.custom_piece_handler
+import haeron_guitar_api.product_component.handlers.product_choice_handler
+import haeron_guitar_api.product_component.handlers.product_configurable_handler
+import haeron_guitar_api.product_component.handlers.fixed_handlers
+
+import haeron_guitar_api.product_type.handlers.bundle_config_handler
+import haeron_guitar_api.product_type.handlers.bundle_static_handler
+import haeron_guitar_api.product_type.handlers.simple_product_handler

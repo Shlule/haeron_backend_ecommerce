@@ -7,7 +7,7 @@ from ..models import Factory
 from .factory_dto import CreateFactoryDTO
 from .factory_input import CreateFactoryInput
 from .factory_service import FactoryService
-from ..types import FactoryGQLType
+from ..types.types import FactoryGQLType
 
 
 @strawberry.type

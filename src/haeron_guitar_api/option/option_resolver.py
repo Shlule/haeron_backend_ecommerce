@@ -9,7 +9,7 @@ from .option_service import OptionService
 from .option_filter import OptionFilterSet
 
 
-from ..types import OptionGQLType
+from ..types.types import OptionGQLType
 
 
 @strawberry.type

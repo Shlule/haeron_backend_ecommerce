@@ -10,7 +10,7 @@ from .instrumentType_filter import InstrumentTypeFilterSet
 from .instrumentType_service import InstrumentTypeService
 from ..permissions.authenticateJwt import IsAuthenticated
 from ..permissions.groupPermission import HasRoleFactory
-from ..types import InstrumentTypeGQLType
+from ..types.types import InstrumentTypeGQLType
 
 
 @strawberry.type

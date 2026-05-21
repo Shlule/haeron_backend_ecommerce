@@ -1,10 +1,13 @@
+from itertools import product
+from tracemalloc import Snapshot
+import strawberry
 import strawberry_django
 from strawberry import ID
-from typing import Optional, List
+from typing import Annotated, Optional, List, Union
 from uuid import UUID
 from datetime import date
 
-from . import models
+from .. import models
 
 from authUser.models import User as CustomUser
 
@@ -151,16 +154,8 @@ class CartItemGQLType:
     configuration_snapshot: dict
 
 
-@strawberry_django.type(models.CartItemOption)
-class CartItemOptionGQLType:
-    uuid: ID
-    option = "PartModelOptionGQLType"
-    price_delta: float
-
-
 @strawberry_django.type(models.Product)
 class ProductGQLType:
     uuid: ID
     name: str
     price: float
-    part_model: "PartModelGQLType"

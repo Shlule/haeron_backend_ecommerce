@@ -8,7 +8,7 @@ from .partType_dto import CreatePartTypeDTO
 from .partType_input import CreatePartTypeInput, PartTypeFilterInput
 from .partType_service import PartTypeService
 from .partType_filter import PartTypeFilterSet
-from ..types import PartTypeGQLType
+from ..types.types import PartTypeGQLType
 
 
 @strawberry.type

@@ -28,6 +28,7 @@ click==8.3.1
     # via uvicorn
 colorama==0.4.6
     # via click
+    # via pytest
 django==5.2.8
     # via django-allauth
     # via django-choices-field
@@ -54,6 +55,8 @@ graphql-core==3.2.7
     # via strawberry-graphql
 h11==0.16.0
     # via uvicorn
+iniconfig==2.3.0
+    # via pytest
 jsonschema==4.26.0
     # via haeron-backend-ecommerce
 jsonschema-specifications==2025.9.1
@@ -61,13 +64,22 @@ jsonschema-specifications==2025.9.1
 lia-web==0.2.3
     # via strawberry-graphql
 packaging==25.0
+    # via pytest
     # via strawberry-graphql
+pluggy==1.6.0
+    # via pytest
 psycopg2==2.9.11
     # via haeron-backend-ecommerce
 pycparser==2.23
     # via cffi
+pygments==2.20.0
+    # via pytest
 pyjwt==2.10.1
     # via djangorestframework-simplejwt
+pytest==9.0.3
+    # via pytest-django
+pytest-django==4.12.0
+    # via haeron-backend-ecommerce
 python-dateutil==2.9.0.post0
     # via strawberry-graphql
 python-decouple==3.8

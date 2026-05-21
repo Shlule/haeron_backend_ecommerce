@@ -53,10 +53,7 @@ class CartItemService:
             if not handler:
                 raise ValueError("No handler exist for this product type")
 
-            validated_data = handler.validate(dto.configuration)
-
-            snapshot = handler.build_snapshot(validated_data)
-            total_price += handler.calculate_price(validated_data)
+            snapshot, total_price = handler.resolve(dto.configuration)
 
         config_hash = ConfigHashService.generate(snapshot)
 

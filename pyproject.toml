@@ -19,6 +19,7 @@ dependencies = [
     "django-filter>=25.2",
     "django-cors-headers>=4.9.0",
     "jsonschema>=4.26.0",
+    "pytest-django>=4.12.0",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
@@ -33,6 +34,14 @@ dev-dependencies = []
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "haeron_backend.settings"
+pythonpath = ["src"]
+
+addopts = "-ra -q"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+testpaths = ["src"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/haeron_backend_ecommerce"]
