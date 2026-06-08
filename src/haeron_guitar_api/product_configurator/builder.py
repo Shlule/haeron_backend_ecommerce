@@ -1,4 +1,6 @@
-from haeron_guitar_api.product_component.product_component_registry import ComponentHandlerRegistry
+from haeron_guitar_api.product_configurator.product_component_handlers.product_component_registry import (
+    ComponentHandlerRegistry,
+)
 from ..types.product_configurator_types import ProductConfiguration
 from ..models import Product
 
@@ -9,7 +11,7 @@ from ..models import Product
 def build_product_configuration(product):
     product = (
         Product.objects.select_related("product_schema")
-        .prefetch_related("product_schema__product_components")
+        .prefetch_related("product_schema__product_components__component_compatibilities")
         .get(pk=product.pk)
     )
 

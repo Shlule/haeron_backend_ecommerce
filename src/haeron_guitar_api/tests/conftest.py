@@ -34,6 +34,16 @@ def instrument_model(db, instrument_type):
 
 
 @pytest.fixture
+def product_schema(db):
+    return ProductSchema.objects.create(name="guitar_strat_schema", code="EG_STRL_SCH")
+
+
+@pytest.fixture
+def product_component(db, product_schema):
+    return ProductComponent.objects.create(key="neck", source_type="custom_piece")
+
+
+@pytest.fixture
 def product(db, instrument_model, product_type, schema):
     return Product.objects.create(
         name="Custom Guitar",

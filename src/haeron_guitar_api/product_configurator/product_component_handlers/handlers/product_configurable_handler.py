@@ -1,10 +1,10 @@
 from django.forms import ValidationError
-from ...models import Product, ProductComponentChoice
+from ....models import Product, ProductComponentChoice
 
 from ..product_component_registry import ComponentHandlerRegistry
-from ...product_type.product_type_registry import ProductTypeHandlerRegistry
+from ...product_type_handlers.product_type_registry import ProductTypeHandlerRegistry
 from ..handlers.base_component_handler import BaseComponentHandler
-from ...types.product_configurator_types import ProductConfigurableComponent
+from ....types.product_configurator_types import ProductConfigurableComponent
 
 
 @ComponentHandlerRegistry.register("product_configurable")

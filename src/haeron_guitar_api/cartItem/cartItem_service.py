@@ -2,7 +2,7 @@ from tracemalloc import Snapshot
 from django.forms import ValidationError
 from .cartItem_dto import createCartItemDTO
 from django.db import transaction
-from ..product_type.product_type_registry import ProductTypeHandlerRegistry
+from ..product_configurator.product_type_handlers.product_type_registry import ProductTypeHandlerRegistry
 from ..models import CartItem, Cart, Product, PartModel, PartModelOption
 import hashlib
 import json

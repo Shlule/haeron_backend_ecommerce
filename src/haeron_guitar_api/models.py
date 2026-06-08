@@ -1,6 +1,7 @@
 from django.db import models
 import uuid
 from django.conf import settings
+from django.core.exceptions import ValidationError
 
 
 class AuditMixin(models.Model):
@@ -173,7 +174,7 @@ class ProductType(models.Model):
 
 class ProductComponent(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    product_schema = models.ForeignKey("ProductSchema", related_name="product_components", on_delete=models.CASCADE)
+    product_schemas = models.ManyToManyField("ProductSchema", related_name="product_components", blank=True, null=True)
     key = models.CharField(max_length=50)
     source_type = models.CharField(
         max_length=30,
@@ -199,12 +200,14 @@ class ProductComponentChoice(models.Model):
 # caution in case we want to retrieve a parMoel from a product be sure that the instrument_model is not empty
 # because we get the partmodel thanks to this class
 class ComponentCompatibility(models.Model):
-    instrument_model = models.ForeignKey("InstrumentModel", blank=True, null=True, on_delete=models.CASCADE)
-    part_model = models.ForeignKey("PartModel", blank=True, null=True, on_delete=models.CASCADE)
-    component = models.ForeignKey("ProductComponent", on_delete=models.CASCADE)
+    instrument_model = models.ForeignKey("InstrumentModel", blank=True, null=True, on_delete=models.SET_NULL)
+    part_model = models.ForeignKey("PartModel", blank=True, null=True, on_delete=models.SET_NULL)
+    component = models.ForeignKey(
+        "ProductComponent", related_name="component_compatibilities", on_delete=models.CASCADE
+    )
 
-    class Meta:
-        unique_together = ("instrument_model", "part_model", "component")
+    # class Meta:
+    #     unique_together = ("instrument_model", "part_model", "component")
 
 
 class ProductSchema(models.Model):
@@ -269,71 +272,88 @@ class OrderItem(models.Model):
     config_hash = models.CharField(max_length=64)
 
 
+# this is use for Rule Engine and put relation between partModelOption on productCOmponentChoice
+# this is link with ConfigurationCondition and ConfigurationResult and participate for the rule engine
+
+
+# the rule engine is a mecanism for put rule configuration for the product. so if partModeloption of component neck is blue
+# then le possibilitie for the option matrial of component body is aluminium and mapple.
+class SelectableValue(models.Model):
+    part_model_option = models.ForeignKey("PartModelOption", null=True, blank=True, on_delete=models.CASCADE)
+
+    product_component_choice = models.ForeignKey(
+        "ProductComponentChoice", null=True, blank=True, on_delete=models.CASCADE
+    )
+
+
 class ConfigurationRule(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255, blank=True)
 
-    # Scope global ou local
-    product_schema = models.ForeignKey("ProductSchema", on_delete=models.CASCADE, related_name="configuration_rules")
+    # make sure to have only one of this field fill
+    # Scope global -> peut etre optionnel
+    target_schema = models.ForeignKey(
+        "ProductSchema", blank=True, null=True, on_delete=models.CASCADE, related_name="targeted_rules"
+    )
 
     # Optionnel → si la règle cible un composant précis
     target_component = models.ForeignKey(
         "ProductComponent", on_delete=models.CASCADE, related_name="targeted_rules", null=True, blank=True
     )
 
-    name = models.CharField(max_length=255, blank=True)
-    priority = models.IntegerField(default=0)
+    # Optionnel -> si la regel est lier a un piece physique
 
-    def __str__(self):
-        return self.name or f"Rule {self.uuid}"
+    target_part_model = models.ForeignKey(
+        "partModel", on_delete=models.CASCADE, related_name="targeted_rules", null=True, blank=True
+    )
 
+    def clean(self):
 
-class SelectableValue(models.Model):
-    VALUE_TYPE_CHOICES = [
-        ("option", "PartModelOption"),
-        ("product", "Product"),
-    ]
+        scopes = [
+            self.target_schema,
+            self.target_component,
+            self.target_part_model,
+        ]
 
-    type = models.CharField(max_length=20, choices=VALUE_TYPE_CHOICES)
+        filled = sum(1 for s in scopes if s is not None)
 
-    part_model_option = models.ForeignKey("PartModelOption", null=True, blank=True, on_delete=models.CASCADE)
-
-    product = models.ForeignKey("Product", null=True, blank=True, on_delete=models.CASCADE)
-
-    def __str__(self):
-        if self.type == "option" and self.part_model_option:
-            return f"Option: {self.part_model_option}"
-        if self.type == "product" and self.product:
-            return f"Product: {self.product}"
-        return "Invalid SelectableValue"
+        if filled != 1:
+            raise ValidationError("Exactly one scope must be defined.")
 
 
 class ConfigurationCondition(models.Model):
-    rule = models.ForeignKey(ConfigurationRule, on_delete=models.CASCADE, related_name="conditions")
+    rule = models.ForeignKey("ConfigurationRule", on_delete=models.CASCADE, related_name="conditions")
 
-    source_component = models.ForeignKey("ProductComponent", on_delete=models.CASCADE, related_name="source_conditions")
-
+    source_component = models.ForeignKey("ProductComponent", on_delete=models.CASCADE)
+    source_option = models.ForeignKey("Option", on_delete=models.CASCADE)
     operator = models.CharField(
         max_length=10,
         choices=[
             ("eq", "Equals"),
-            ("in", "In"),
             ("neq", "Not equals"),
+            ("in", "In"),
         ],
-        default="in",
     )
 
-    values = models.ManyToManyField("SelectableValue")
+    # cela est peut etre pas necessaire car  on peut faire dirrectement un recherche sur le partmodel
+    # source_values = models.ManyToManyField("SelectableValue", related_name="condition_sources")
 
-    def __str__(self):
-        return f"Condition on {self.source_component.key}"
+    compare_values = models.ManyToManyField("SelectableValue", related_name="condition_targets")
 
 
 class ConfigurationResult(models.Model):
-    rule = models.ForeignKey(ConfigurationRule, on_delete=models.CASCADE, related_name="results")
+    rule = models.ForeignKey("ConfigurationRule", on_delete=models.CASCADE, related_name="results")
 
-    target_component = models.ForeignKey("ProductComponent", on_delete=models.CASCADE, related_name="result_rules")
+    target_component = models.ForeignKey("ProductComponent", on_delete=models.CASCADE)
+    target_option = models.ForeignKey("Option", on_delete=models.CASCADE)
+    # action = models.CharField(
+    #     max_length=10,
+    #     choices=[
+    #         ("allow", "Allow"),
+    #         ("deny", "Deny"),
+    #         ("set", "Set"),
+    #     ],
+    # )
+    target_values = models.ManyToManyField("SelectableValue", related_name="result_targets")
 
-    allowed_values = models.ManyToManyField("SelectableValue")
-
-    def __str__(self):
-        return f"Result for {self.target_component.key}"
+    # values = models.ManyToManyField("SelectableValue", related_name="result_values")1

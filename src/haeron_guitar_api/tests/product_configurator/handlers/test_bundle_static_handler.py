@@ -1,5 +1,7 @@
 import pytest
-from haeron_guitar_api.product_type.handlers.bundle_static_handler import BundleStaticHandler
+from haeron_guitar_api.product_configurator.product_type_handlers.handlers.bundle_static_handler import (
+    BundleStaticHandler,
+)
 
 
 @pytest.mark.django_db

@@ -2,8 +2,8 @@ from unittest import TestCase
 from uuid import uuid4
 from ..models import ProductType
 
-from ..product_type.product_type_registry import ProductTypeHandlerRegistry
-from ..product_type.handlers.custom_piece_handler import CustomPieceHandler
+from ..product_configurator.product_type_handlers.product_type_registry import ProductTypeHandlerRegistry
+from ..product_configurator.product_component_handlers.handlers.custom_piece_handler import CustomPieceHandler
 
 
 class Test_ProductTypeHandlerRegistry(TestCase):

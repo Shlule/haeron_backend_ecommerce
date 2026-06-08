@@ -1,5 +1,7 @@
 import pytest
-from haeron_guitar_api.product_component.product_component_registry import ComponentHandlerRegistry
+from haeron_guitar_api.product_configurator.product_component_handlers.product_component_registry import (
+    ComponentHandlerRegistry,
+)
 from haeron_guitar_api.product_configurator.builder import build_product_configuration
 from haeron_guitar_api.models import Option, ComponentCompatibility, PartModelOption
 
@@ -130,39 +132,3 @@ def test_handler_called_for_each_component(product, custom_component, monkeypatc
     build_product_configuration(product)
 
     assert calls == [custom_component.key]
-
-
-# @pytest.mark.django_db
-# def test_configuration_output_structure(product, custom_component, monkeypatch):
-#     class FakeHandler:
-#         def build_configuration_component(self, component, product):
-#             return {"key": component.key, "type": "custom_piece", "options": []}
-
-#     monkeypatch.setattr(ComponentHandlerRegistry, "get_handler", lambda source_type: FakeHandler())
-
-#     result = build_product_configuration(product)
-
-#     component = result.components[0]
-
-#     assert "key" in component
-#     assert "type" in component
-#     assert isinstance(component["options"], list)
-
-
-# from django.test.utils import CaptureQueriesContext
-# from django.db import connection
-
-
-# @pytest.mark.django_db
-# def test_no_n_plus_one(product, custom_component, monkeypatch):
-
-#     class FakeHandler:
-#         def build_configuration_component(self, component, product):
-#             return {"key": component.key}
-
-#     monkeypatch.setattr(ComponentHandlerRegistry, "get_handler", lambda source_type: FakeHandler())
-
-#     with CaptureQueriesContext(connection) as ctx:
-#         build_product_configuration(product)
-
-#     assert len(ctx.captured_queries) < 10  # seuil raisonnable

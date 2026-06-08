@@ -4,7 +4,9 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 
 from haeron_guitar_api.models import Product
-from haeron_guitar_api.product_type.handlers.simple_product_handler import SimpleProductHandler
+from haeron_guitar_api.product_configurator.product_type_handlers.handlers.simple_product_handler import (
+    SimpleProductHandler,
+)
 
 
 @pytest.mark.django_db

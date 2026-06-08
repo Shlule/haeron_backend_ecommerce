@@ -1,7 +1,9 @@
 import pytest
 from django.core.exceptions import ValidationError
 
-from haeron_guitar_api.product_component.handlers.product_choice_handler import ProducChoiceHandler
+from haeron_guitar_api.product_configurator.product_component_handlers.handlers.product_choice_handler import (
+    ProducChoiceHandler,
+)
 from haeron_guitar_api.models import ProductComponentChoice
 
 

@@ -1,6 +1,6 @@
 import pytest
 
-from haeron_guitar_api.product_component.handlers.fixed_handlers import FixedHandler
+from haeron_guitar_api.product_configurator.product_component_handlers.handlers.fixed_handlers import FixedHandler
 
 
 @pytest.mark.django_db

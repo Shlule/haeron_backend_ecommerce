@@ -46,9 +46,8 @@ django-cors-headers==4.9.0
     # via haeron-backend-ecommerce
 django-filter==25.2
     # via haeron-backend-ecommerce
-djangorestframework==3.16.1
+djangorestframework==3.17.1
     # via djangorestframework-simplejwt
-    # via haeron-backend-ecommerce
 djangorestframework-simplejwt==5.5.1
     # via haeron-backend-ecommerce
 graphql-core==3.2.7

@@ -2,8 +2,12 @@ from decimal import Decimal
 from pprint import pprint
 import pytest
 from haeron_guitar_api.models import InstrumentModel
-from haeron_guitar_api.product_type.product_type_registry import ProductTypeHandlerRegistry
-from haeron_guitar_api.product_component.product_component_registry import ComponentHandlerRegistry
+from haeron_guitar_api.product_configurator.product_type_handlers.product_type_registry import (
+    ProductTypeHandlerRegistry,
+)
+from haeron_guitar_api.product_configurator.product_component_handlers.product_component_registry import (
+    ComponentHandlerRegistry,
+)
 from haeron_guitar_api.models import ProductComponent, Product, ProductComponentChoice
 from haeron_guitar_api.product_type import handlers
 from uuid import uuid4

@@ -2,7 +2,9 @@ from decimal import Decimal
 from django.forms import ValidationError
 import pytest
 
-from haeron_guitar_api.product_component.handlers.custom_piece_handler import CustomPieceHandler
+from haeron_guitar_api.product_configurator.product_component_handlers.handlers.custom_piece_handler import (
+    CustomPieceHandler,
+)
 from haeron_guitar_api.models import ComponentCompatibility, PartModelOption, Option
 
 

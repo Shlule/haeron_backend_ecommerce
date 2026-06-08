@@ -8,7 +8,6 @@ authors = [
 dependencies = [
     "django>=5.2.8",
     "psycopg2>=2.9.11",
-    "djangorestframework>=3.16.1",
     "python-decouple>=3.8",
     "argon2-cffi>=25.1.0",
     "djangorestframework-simplejwt>=5.5.1",
