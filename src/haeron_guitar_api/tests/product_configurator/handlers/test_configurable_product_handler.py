@@ -9,7 +9,7 @@ from haeron_guitar_api.product_configurator.product_component_handlers.product_c
     ComponentHandlerRegistry,
 )
 from haeron_guitar_api.models import ProductComponent, Product, ProductComponentChoice
-from haeron_guitar_api.product_type import handlers
+from haeron_guitar_api.product_configurator.product_component_handlers import handlers
 from uuid import uuid4
 from django.forms import ValidationError
 from jsonschema import ValidationError as jsonValidationError

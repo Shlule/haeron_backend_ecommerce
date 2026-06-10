@@ -1,6 +1,6 @@
 from jsonschema import ValidationError
 from ..product_component_registry import ComponentHandlerRegistry
-from ...types.product_configurator_types import FixedComponent
+from ....types.product_configurator_types import FixedComponent
 
 
 @ComponentHandlerRegistry.register("fixed")

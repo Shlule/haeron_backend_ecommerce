@@ -1,7 +1,7 @@
 from django.forms import ValidationError
-from ...models import ProductComponentChoice
+from ....models import ProductComponentChoice
 from ..product_component_registry import ComponentHandlerRegistry
-from ...types.product_configurator_types import ProductChoiceComponent
+from ....types.product_configurator_types import ProductChoiceComponent
 
 
 @ComponentHandlerRegistry.register("product_choice")

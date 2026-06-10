@@ -1,12 +1,27 @@
-import json
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from uuid import uuid4
 
-from ..models import CartItem, Cart, Product, ProductType, PartModel, PartType, PartModelOption, Option
+from ..models import (
+    CartItem,
+    Cart,
+    Product,
+    ProductType,
+    PartModel,
+    PartType,
+    ProductSchema,
+    ProductComponent,
+    PartModelOption,
+    Option,
+    InstrumentModel,
+    InstrumentType,
+    ComponentCompatibility,
+)
 from ..cartItem.cartItem_service import CartItemService, CartItemFactory, ConfigHashService
 from ..cartItem.cartItem_dto import createCartItemDTO
+from haeron_guitar_api.product_configurator.product_type_handlers import handlers
+from haeron_guitar_api.product_configurator.product_component_handlers import handlers
 
 User = get_user_model()
 
@@ -15,8 +30,16 @@ class CartItemServiceTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="test")
         self.cart = Cart.objects.create(user=self.user, is_active=True)
-        self.product_type = ProductType.objects.create(code="custom_piece")
-        self.product = Product.objects.create(name="Guitar Custom", price=100, product_type=self.product_type)
+
+        self.product_type = ProductType.objects.create(code="bundle_dynamique")
+        self.product_type_fixed = ProductType.objects.create(code="simple_product")
+        self.instrument_type_guitar = InstrumentType.objects.create(name="guitar", code="G")
+        self.guitar_strat = InstrumentModel.objects.create(
+            name="guitar_strat", instrument_type=self.instrument_type_guitar
+        )
+        self.product = Product.objects.create(
+            name="Guitar Custom", instrument_model=self.guitar_strat, price=100, product_type=self.product_type
+        )
 
     # SECTION - adding quantity
     def test_add_item_success(self):
@@ -53,24 +76,37 @@ class CartItemServiceTest(TestCase):
         self.assertEqual(CartItem.objects.count(), 1)
 
     def test_add_same_item_twice_with_config(self):
-        # TODO -  make the creat
-        option = Option.objects.create(name="color")
-        part_type = PartType.objects.create(name="superior body", code="SB")
+        option_color = Option.objects.create(name="color")
+        option_radius = Option.objects.create(name="radius")
+        part_type = PartType.objects.create(name="neck", code="NCK")
         part_model = PartModel.objects.create(name="starLight", code="STR", price=100.00, part_type=part_type)
         part_model_option1 = PartModelOption.objects.create(
-            name="bleu irridescent", code="bleu", part_model=part_model, option=option, price_delta=50
+            name="bleu irridescent", code="bleu", part_model=part_model, option=option_color, price_delta=50
         )
         part_model_option2 = PartModelOption.objects.create(
-            name="rouge vermillion", code="rouge", part_model=part_model, option=option, price_delta=20
+            name="diametre12", code="D12", part_model=part_model, option=option_radius, price_delta=20
         )
-
+        product_schema = ProductSchema.objects.create(name="test_guitar_schema", code="test_guitar_schema")
+        product_component_neck = ProductComponent.objects.create(key="neck", source_type="custom_piece")
+        product_component_mic = ProductComponent.objects.create(key="mic", source_type="product_choice")
+        product_schema.product_components.add(product_component_mic, product_component_neck)
+        component_compat_neck = ComponentCompatibility.objects.create(
+            instrument_model=self.guitar_strat, part_model=part_model, component=product_component_neck
+        )
+        test_mic = Product.objects.create(name="test_mic", price=100, product_type=self.product_type_fixed)
+        self.guitar_strat.compatible_parts.add(part_model)
+        self.product.product_schema = product_schema
+        self.product.save()
         dto1 = createCartItemDTO(
             cart_id=self.cart.uuid,
             product_id=self.product.uuid,
             quantity=1,
             configuration={
-                "part_model_id": str(part_model.uuid),
-                "part_model_option_ids": [str(part_model_option1.uuid), str(part_model_option2.uuid)],
+                "neck": {
+                    "part_model_id": str(part_model.uuid),
+                    "part_model_option_ids": [str(part_model_option1.uuid), str(part_model_option2.uuid)],
+                },
+                "mic": {"product_id": str(test_mic.uuid)},
             },
         )
         dto2 = createCartItemDTO(

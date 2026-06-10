@@ -116,7 +116,7 @@ class RuleEngine:
         return ResultDTO(
             component=result.target_component,
             option=result.target_option,
-            values=[self.serialize_value(v) for v in result.values.all()],
+            target_values=[self.serialize_value(v) for v in result.target_values.all()],
         )
 
         # return {

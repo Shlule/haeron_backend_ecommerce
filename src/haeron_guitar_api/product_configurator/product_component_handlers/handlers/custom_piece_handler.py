@@ -1,10 +1,11 @@
 from collections import Counter
+from decimal import Decimal
+from pprint import pprint
 from django.forms import ValidationError
-from ...models import PartModel, PartModelOption
-from ...models import ComponentCompatibility
+from ....models import PartModel, PartModelOption, ComponentCompatibility
 from ..handlers.base_component_handler import BaseComponentHandler
 from ..product_component_registry import ComponentHandlerRegistry
-from ...types.product_configurator_types import CustomPieceComponent
+from ....types.product_configurator_types import CustomPieceComponent
 
 
 @ComponentHandlerRegistry.register("custom_piece")
@@ -29,6 +30,8 @@ class CustomPieceHandler(BaseComponentHandler):
         )
 
         options = [part_model_option.option.name for part_model_option in part_model_options]
+        print("!" * 50)
+        pprint(options)
         options_count = Counter(options)
         option_duplicates = [option for option, count in options_count.items() if count > 1]
         if option_duplicates:
@@ -57,12 +60,19 @@ class CustomPieceHandler(BaseComponentHandler):
         base_price = part_model.price
         options_price = sum(option.price_delta for option in selected_part_model_options)
 
+        print("+" * 50)
+        print(part_model.uuid)
+        print(product.instrument_model)
+        print(component)
+        pprint(ComponentCompatibility.objects.all().values_list("part_model", "instrument_model", "component"))
         if product.instrument_model:
             is_valid = ComponentCompatibility.objects.filter(
                 instrument_model=product.instrument_model, component=component, part_model=part_model
-            ).exists()
-        if not is_valid:
-            raise ValidationError(f"{part_model}, not compatible with {component}")
+            )
+            print("~" * 50)
+            pprint(is_valid)
+            if not is_valid:
+                raise ValidationError(f"{part_model.code}, not compatible with {component}")
 
         return {
             "type": "custom_piece",
@@ -76,7 +86,7 @@ class CustomPieceHandler(BaseComponentHandler):
                 }
                 for part_model_option in selected_part_model_options
             ],
-            "price": float(base_price + options_price),
+            "price": Decimal(base_price + options_price),
         }
 
     def bulk_build_configuration(self, components, product):

@@ -1,0 +1,3 @@
+from haeron_guitar_api.product_configurator.product_type_handlers.handlers import bundle_config_handler
+from haeron_guitar_api.product_configurator.product_type_handlers.handlers import bundle_static_handler
+from haeron_guitar_api.product_configurator.product_type_handlers.handlers import simple_product_handler

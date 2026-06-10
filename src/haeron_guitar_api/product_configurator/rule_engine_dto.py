@@ -101,7 +101,7 @@ class ResultDTO:
     option: str
     # action: str
 
-    values: list[str]
+    target_values: list[str]
 
 
 @dataclass

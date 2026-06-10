@@ -1,3 +1,4 @@
+from pprint import pprint
 from tracemalloc import Snapshot
 from django.forms import ValidationError
 from .cartItem_dto import createCartItemDTO
@@ -43,8 +44,18 @@ class CartItemService:
         if dto.quantity <= 0:
             raise ValidationError("Quantity must be greater than 0")
 
-        product = Product.objects.select_related("product_type").get(pk=dto.product_id)
+        product = (
+            Product.objects.select_related("product_type", "product_schema")
+            .prefetch_related("product_schema__product_components")
+            .get(pk=dto.product_id)
+        )
+        print("$" * 50)
+        pprint(product)
+        pprint(product.product_schema)
+        pprint(product.product_schema.product_components)
         product_type_code = product.product_type.code
+        print(product_type_code)
+        print(ProductTypeHandlerRegistry._registry)
         cart = Cart.objects.get(uuid=dto.cart_id, is_active=True)
         total_price = product.price
         snapshot = {}
@@ -53,7 +64,7 @@ class CartItemService:
             if not handler:
                 raise ValueError("No handler exist for this product type")
 
-            snapshot, total_price = handler.resolve(dto.configuration)
+            snapshot, total_price = handler.resolve(product, dto.configuration)
 
         config_hash = ConfigHashService.generate(snapshot)
 

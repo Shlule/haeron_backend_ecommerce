@@ -11,4 +11,7 @@ class ComponentHandlerRegistry:
 
     @classmethod
     def get_handler(cls, source_type):
-        return cls._registry.get(source_type)
+        result = cls._registry.get(source_type)
+        if not result:
+            raise ValueError(f"No corresponding component Handler with source type {source_type}")
+        return result
