@@ -40,7 +40,9 @@ def product_schema(db):
 
 @pytest.fixture
 def product_component(db, product_schema):
-    return ProductComponent.objects.create(key="neck", source_type="custom_piece")
+    product_component = ProductComponent.objects.create(key="neck", source_type="custom_piece")
+    product_component.product_schemas.add(product_schema)
+    return product_component
 
 
 @pytest.fixture
@@ -66,19 +68,23 @@ def schema(db):
 
 @pytest.fixture
 def custom_component(db, schema):
-    return ProductComponent.objects.create(product_schema=schema, key="neck", source_type="custom_piece")
+    product_component = ProductComponent.objects.create(key="neck", source_type="custom_piece")
+    product_component.product_schemas.add(schema)
+    return product_component
 
 
 @pytest.fixture
 def choice_component(db, schema):
-    return ProductComponent.objects.create(product_schema=schema, key="pickup", source_type="product_choice")
+    product_component = ProductComponent.objects.create(key="pickup", source_type="product_choice")
+    product_component.product_schemas.add(schema)
+    return product_component
 
 
 @pytest.fixture
 def fixed_component(db, schema, product):
-    return ProductComponent.objects.create(
-        product_schema=schema, key="case", source_type="fixed", fixed_product=product
-    )
+    product_component = ProductComponent.objects.create(key="case", source_type="fixed", fixed_product=product)
+    product_component.product_schemas.add(schema)
+    return product_component
 
 
 @pytest.fixture

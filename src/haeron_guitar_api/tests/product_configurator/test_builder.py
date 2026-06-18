@@ -1,9 +1,11 @@
+from pprint import pprint
 import pytest
 from haeron_guitar_api.product_configurator.product_component_handlers.product_component_registry import (
     ComponentHandlerRegistry,
 )
 from haeron_guitar_api.product_configurator.builder import build_product_configuration
 from haeron_guitar_api.models import Option, ComponentCompatibility, PartModelOption
+from haeron_guitar_api.product_configurator.product_component_handlers import handlers
 
 
 @pytest.mark.django_db
@@ -35,6 +37,7 @@ def test_build_product_configuration_multiple_components(
     fixed_component,
     monkeypatch,
 ):
+
     class FakeHandler:
         def build_configuration_component(self, component, product):
             return {"key": component.key}
@@ -58,6 +61,9 @@ def test_build_configuration_with_custom_piece_real(
     instrument_model,
     part_model,
 ):
+
+    print("`" * 50)
+    print(product.product_schema)
     ComponentCompatibility.objects.create(
         instrument_model=instrument_model,
         component=custom_component,
@@ -104,7 +110,7 @@ def test_build_configuration_with_custom_piece_real(
     assert pm["id"] == str(part_model.uuid)
     assert pm["price"] == float(part_model.price)
 
-    assert len(pm["options"]) == 1
+    assert len(pm["options"]) == 3
     assert pm["options"][0]["name"] == "color"
     assert pm["options"][0]["value"] == "blue"
 

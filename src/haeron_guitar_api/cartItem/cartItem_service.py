@@ -1,10 +1,12 @@
-from pprint import pprint
-from tracemalloc import Snapshot
 from django.forms import ValidationError
 from .cartItem_dto import createCartItemDTO
+from ..cart.cart_service import CartService
 from django.db import transaction
 from ..product_configurator.product_type_handlers.product_type_registry import ProductTypeHandlerRegistry
-from ..models import CartItem, Cart, Product, PartModel, PartModelOption
+from ..models import CartItem, Product
+from haeron_guitar_api.cart.cart_dto import CreateCartDTO
+from haeron_guitar_api.product_configurator.configuration_normalizer import ConfigurationNormalizer
+from haeron_guitar_api.product_configurator.configuration_rule_engine import RuleEngine
 import hashlib
 import json
 
@@ -40,7 +42,7 @@ class ConfigHashService:
 class CartItemService:
     @staticmethod
     @transaction.atomic
-    def add_item(dto: createCartItemDTO):
+    def add_item(dto: createCartItemDTO, user=None, session_key=None):
         if dto.quantity <= 0:
             raise ValidationError("Quantity must be greater than 0")
 
@@ -49,14 +51,8 @@ class CartItemService:
             .prefetch_related("product_schema__product_components")
             .get(pk=dto.product_id)
         )
-        print("$" * 50)
-        pprint(product)
-        pprint(product.product_schema)
-        pprint(product.product_schema.product_components)
         product_type_code = product.product_type.code
-        print(product_type_code)
-        print(ProductTypeHandlerRegistry._registry)
-        cart = Cart.objects.get(uuid=dto.cart_id, is_active=True)
+        cart = CartService.get_or_create_cart(CreateCartDTO(user=user, session_key=session_key))
         total_price = product.price
         snapshot = {}
         if dto.configuration:
@@ -65,6 +61,14 @@ class CartItemService:
                 raise ValueError("No handler exist for this product type")
 
             snapshot, total_price = handler.resolve(product, dto.configuration)
+
+        print("@" * 50)
+        print(total_price)
+        engine = RuleEngine()
+        rules_snapshot = engine.collect_rules(product)
+        if rules_snapshot:
+            rule_checking_data = ConfigurationNormalizer.normalize(snapshot=snapshot)
+            rules_violation = engine.check(configuration=rule_checking_data, rules=rules_snapshot["rules"])
 
         config_hash = ConfigHashService.generate(snapshot)
 

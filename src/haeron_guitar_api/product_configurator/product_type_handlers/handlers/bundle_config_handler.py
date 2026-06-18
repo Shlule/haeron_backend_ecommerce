@@ -1,3 +1,5 @@
+from decimal import Decimal
+from pprint import pprint
 from jsonschema import ValidationError
 from ..product_type_registry import ProductTypeHandlerRegistry
 from ...product_component_handlers.product_component_registry import ComponentHandlerRegistry
@@ -19,13 +21,11 @@ class BundleConfigHandler:
             if not handler:
                 raise ValueError(f"No handler for {component.source_type}")
             result = handler.resolve(component, data, product)
+            print("&" * 50)
+            pprint(result)
+            total_price += Decimal(result.get("price", 0))
 
             snapshot.append(result)
-            print("@" * 50)
-            print(type(product.price))
-            print(type(result.get("price")))
-            print(result.get("price"))
-            total_price += result.get("price", 0)
         return snapshot, total_price
 
     def validate_structure(self, components, config):

@@ -61,6 +61,8 @@ def collect_rule_setup(
     product_component,
     part_model_with_options,
 ):
+    print("!" * 50)
+    pprint(product_component)
     product_component.product_schemas.add(product_schema)
     compat1 = ComponentCompatibility.objects.create(
         part_model=part_model, instrument_model=instrument_model, component=product_component

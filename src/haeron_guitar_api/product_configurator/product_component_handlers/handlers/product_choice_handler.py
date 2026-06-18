@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.forms import ValidationError
 from ....models import ProductComponentChoice
 from ..product_component_registry import ComponentHandlerRegistry
@@ -27,7 +28,7 @@ class ProducChoiceHandler:
             "component": component.key,
             "product_id": str(chosen_product.uuid),
             "name": chosen_product.name,
-            "price": float(chosen_product.price),
+            "price": str(chosen_product.price),
         }
 
     def bulk_build_configuration(self, components, product):

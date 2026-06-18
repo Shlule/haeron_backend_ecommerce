@@ -174,6 +174,8 @@ class ProductType(models.Model):
 
 class ProductComponent(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # manytoMany because the component can be shared between schema . multiple schema can get a neck component and a schema get multiple component
+    # such as neck body etc.
     product_schemas = models.ManyToManyField("ProductSchema", related_name="product_components", blank=True, null=True)
     key = models.CharField(max_length=50)
     source_type = models.CharField(
@@ -247,15 +249,18 @@ class Order(models.Model):
     status = models.CharField(
         max_length=30,
         choices=[
-            ("draft", "Draft"),
+            ("pending", "Pending"),
             ("paid", "Paid"),
             ("processing", "Processing"),
+            ("shipped", "Shipped"),
             ("completed", "Completed"),
+            ("cancelled", "Cancelled"),
         ],
-        default="draft",
+        default="pending",
     )
 
-    total_price = models.DecimalField(max_digits=10, decimal_places=2)
+    # blankable and nullable because we fill this fields with calculation of order itemPrice.
+    total_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -346,14 +351,6 @@ class ConfigurationResult(models.Model):
 
     target_component = models.ForeignKey("ProductComponent", on_delete=models.CASCADE)
     target_option = models.ForeignKey("Option", on_delete=models.CASCADE)
-    # action = models.CharField(
-    #     max_length=10,
-    #     choices=[
-    #         ("allow", "Allow"),
-    #         ("deny", "Deny"),
-    #         ("set", "Set"),
-    #     ],
-    # )
     target_values = models.ManyToManyField("SelectableValue", related_name="result_targets")
 
     # values = models.ManyToManyField("SelectableValue", related_name="result_values")1

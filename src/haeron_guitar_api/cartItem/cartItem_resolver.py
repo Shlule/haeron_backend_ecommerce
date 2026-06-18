@@ -27,14 +27,12 @@ class CartItemMutation:
     @strawberry.mutation
     def create_cart_item(self, input: CreateCartItemsInput) -> CartItemGQLType:
         dto = createCartItemDTO(
-            cart_id=input.cart_id,
+            configuration=input.configuration,
             product_id=input.product_id,
             quantity=input.quantity,
-            part_model_id=input.part_model_id,
-            part_model_option_ids=input.part_model_option_ids,
         )
 
-        item = CartItemService.add_item(dto)
+        item = CartItemService.add_item(dto, user=info.context.user, session_key=info.context.session.session_key)
         return item
 
     @strawberry.mutation

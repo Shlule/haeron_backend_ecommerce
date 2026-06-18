@@ -1,3 +1,4 @@
+from pprint import pprint
 from haeron_guitar_api.product_configurator.product_component_handlers.product_component_registry import (
     ComponentHandlerRegistry,
 )

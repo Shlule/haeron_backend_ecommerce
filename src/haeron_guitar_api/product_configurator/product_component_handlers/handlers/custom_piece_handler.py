@@ -30,8 +30,6 @@ class CustomPieceHandler(BaseComponentHandler):
         )
 
         options = [part_model_option.option.name for part_model_option in part_model_options]
-        print("!" * 50)
-        pprint(options)
         options_count = Counter(options)
         option_duplicates = [option for option, count in options_count.items() if count > 1]
         if option_duplicates:
@@ -59,18 +57,10 @@ class CustomPieceHandler(BaseComponentHandler):
 
         base_price = part_model.price
         options_price = sum(option.price_delta for option in selected_part_model_options)
-
-        print("+" * 50)
-        print(part_model.uuid)
-        print(product.instrument_model)
-        print(component)
-        pprint(ComponentCompatibility.objects.all().values_list("part_model", "instrument_model", "component"))
         if product.instrument_model:
             is_valid = ComponentCompatibility.objects.filter(
                 instrument_model=product.instrument_model, component=component, part_model=part_model
             )
-            print("~" * 50)
-            pprint(is_valid)
             if not is_valid:
                 raise ValidationError(f"{part_model.code}, not compatible with {component}")
 
@@ -86,7 +76,7 @@ class CustomPieceHandler(BaseComponentHandler):
                 }
                 for part_model_option in selected_part_model_options
             ],
-            "price": Decimal(base_price + options_price),
+            "price": str(base_price + options_price),
         }
 
     def bulk_build_configuration(self, components, product):
@@ -115,7 +105,7 @@ class CustomPieceHandler(BaseComponentHandler):
         for comp in components:
             part_models_data = []
 
-            for compat in compat_by_component.get(comp.id, []):
+            for compat in compat_by_component.get(comp.uuid, []):
                 pm = compat.part_model
 
                 part_models_data.append(
@@ -130,7 +120,7 @@ class CustomPieceHandler(BaseComponentHandler):
                                 "value": opt.name,
                                 "price_delta": float(opt.price_delta),
                             }
-                            for opt in options_by_part_model.get(pm.id, [])
+                            for opt in options_by_part_model.get(pm.uuid, [])
                         ],
                     }
                 )

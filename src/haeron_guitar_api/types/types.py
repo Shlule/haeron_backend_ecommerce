@@ -1,11 +1,10 @@
-from itertools import product
-from tracemalloc import Snapshot
 import strawberry
 import strawberry_django
 from strawberry import ID
-from typing import Annotated, Optional, List, Union
+from typing import Optional, List
 from uuid import UUID
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
 
 from .. import models
 
@@ -64,14 +63,14 @@ class PartModelOptionGQLType:
     code: str
     part_model: "PartModelGQLType"
     option: "OptionGQLType"
-    price_delta = float
+    price_delta = Decimal
 
 
 @strawberry_django.type(models.PartModel)
 class PartModelGQLType:
     uuid: ID
     name: str
-    price: float
+    price: Decimal
     part_type: PartTypeGQLType
     series: Optional["SeriesGQLType"]
     code: str
@@ -150,7 +149,7 @@ class CartItemGQLType:
     cart: "CartGQLType"
     product: "ProductGQLType"
     quantity: int
-    unit_price: float
+    unit_price: Decimal
     configuration_snapshot: dict
 
 
@@ -158,4 +157,23 @@ class CartItemGQLType:
 class ProductGQLType:
     uuid: ID
     name: str
-    price: float
+    price: Decimal
+
+
+@strawberry.type
+class OrderItemType:
+    uuid: UUID
+    product_id: UUID
+    quantity: int
+    unit_price: Decimal
+    config_hash: str
+    config_snapshot: strawberry.scalars.JSON
+
+
+@strawberry.type
+class OrderType:
+    uuid: UUID
+    status: str
+    total_price: Decimal
+    created_at: datetime
+    items: list[OrderItemType]
