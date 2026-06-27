@@ -1,3 +1,4 @@
+from pprint import pprint
 from django.forms import ValidationError
 from .cartItem_dto import createCartItemDTO
 from ..cart.cart_service import CartService
@@ -7,6 +8,7 @@ from ..models import CartItem, Product
 from haeron_guitar_api.cart.cart_dto import CreateCartDTO
 from haeron_guitar_api.product_configurator.configuration_normalizer import ConfigurationNormalizer
 from haeron_guitar_api.product_configurator.configuration_rule_engine import RuleEngine
+from haeron_guitar_api.product_configurator.rule_engine_dto import toRuleDto
 import hashlib
 import json
 
@@ -62,13 +64,14 @@ class CartItemService:
 
             snapshot, total_price = handler.resolve(product, dto.configuration)
 
-        print("@" * 50)
-        print(total_price)
         engine = RuleEngine()
         rules_snapshot = engine.collect_rules(product)
+        rules_snapshot = toRuleDto(rules_snapshot["rules"])
         if rules_snapshot:
             rule_checking_data = ConfigurationNormalizer.normalize(snapshot=snapshot)
-            rules_violation = engine.check(configuration=rule_checking_data, rules=rules_snapshot["rules"])
+            rules_violation = engine.check(configuration=rule_checking_data, rules=rules_snapshot)
+            if rules_violation:
+                raise ValidationError(rules_violation)
 
         config_hash = ConfigHashService.generate(snapshot)
 

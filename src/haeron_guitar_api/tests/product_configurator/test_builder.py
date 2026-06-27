@@ -20,8 +20,6 @@ def test_build_product_configuration_basic(product, custom_component, monkeypatc
     monkeypatch.setattr(ComponentHandlerRegistry, "get_handler", lambda source_type: FakeHandler())
 
     result = build_product_configuration(product)
-    print("#" * 50)
-    print(result)
 
     assert result.product == product
     assert len(result.components) == 1
@@ -45,8 +43,6 @@ def test_build_product_configuration_multiple_components(
     monkeypatch.setattr(ComponentHandlerRegistry, "get_handler", lambda source_type: FakeHandler())
 
     result = build_product_configuration(product)
-    print("@" * 50)
-    print(result)
 
     assert len(result.components) == 3
 
@@ -62,8 +58,6 @@ def test_build_configuration_with_custom_piece_real(
     part_model,
 ):
 
-    print("`" * 50)
-    print(product.product_schema)
     ComponentCompatibility.objects.create(
         instrument_model=instrument_model,
         component=custom_component,

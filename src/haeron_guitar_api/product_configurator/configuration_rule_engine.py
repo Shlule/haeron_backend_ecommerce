@@ -29,10 +29,14 @@ class RuleEngine:
 
     def collect_rules(self, product: Product):
 
+        part_models = PartModel.objects.filter(
+            componentcompatibility__component__product_schemas=product.product_schema
+        ).distinct()
+
         rules = ConfigurationRule.objects.filter(
             models.Q(target_schema=product.product_schema)
             | models.Q(target_component__product_schemas=product.product_schema)
-            | models.Q(target_part_model__isnull=False)
+            | models.Q(target_part_model__in=part_models)
         ).prefetch_related(
             "conditions",
             "results",
@@ -70,8 +74,6 @@ class RuleEngine:
     # }
 
     def serialize_condition(self, condition: ConfigurationCondition):
-        # pprint("[]" * 50)
-        # pprint(condition.values)
 
         return ConditionDTO(
             component=condition.source_component,

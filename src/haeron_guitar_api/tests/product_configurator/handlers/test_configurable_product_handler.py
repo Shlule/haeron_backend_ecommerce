@@ -42,9 +42,7 @@ def test_guitar_scenario(product, custom_component, fixed_component, choice_comp
         .get(pk=product.uuid)
     )
     for component in product.product_schema.product_components.all():
-        print(component.key)
 
-    print(handler)
 
 
 @pytest.mark.django_db

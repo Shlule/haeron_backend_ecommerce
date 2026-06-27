@@ -27,6 +27,7 @@ class CheckoutService:
             OrderItem.objects.create(
                 order=order,
                 product_id=item.product.uuid,
+                product_name=item.product.name,
                 quantity=item.quantity,
                 unit_price=item.unit_price,
                 config_snapshot=item.config_snapshot,

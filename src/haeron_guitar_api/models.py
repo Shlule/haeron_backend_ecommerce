@@ -269,6 +269,7 @@ class OrderItem(models.Model):
     order = models.ForeignKey(Order, related_name="order_items", on_delete=models.CASCADE)
 
     product_id = models.UUIDField()
+    product_name = models.CharField(max_length=255)
 
     quantity = models.IntegerField()
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
@@ -353,4 +354,4 @@ class ConfigurationResult(models.Model):
     target_option = models.ForeignKey("Option", on_delete=models.CASCADE)
     target_values = models.ManyToManyField("SelectableValue", related_name="result_targets")
 
-    # values = models.ManyToManyField("SelectableValue", related_name="result_values")1
+    # values = models.ManyToManyField("SelectableValue", related_name="result_values")

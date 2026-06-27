@@ -21,8 +21,6 @@ class BundleConfigHandler:
             if not handler:
                 raise ValueError(f"No handler for {component.source_type}")
             result = handler.resolve(component, data, product)
-            print("&" * 50)
-            pprint(result)
             total_price += Decimal(result.get("price", 0))
 
             snapshot.append(result)
