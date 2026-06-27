@@ -246,6 +246,10 @@ class Order(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, unique=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
 
+    # this key is provided by the front end th goal is to avoid genreating multiple order if
+    # user emit multiple request because low frequency network
+    idempotency_key = models.UUIDField()
+
     status = models.CharField(
         max_length=30,
         choices=[

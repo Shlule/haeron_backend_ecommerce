@@ -9,14 +9,19 @@ from haeron_guitar_api.cart.cart_dto import CreateCartDTO
 
 class CheckoutService:
     @transaction.atomic
-    def checkout(user=None, session_key=None):
+    def checkout(idempotency_key, user=None, session_key=None):
         if not user and not session_key:
             raise ValueError("User or session_key are not either present")
+
+        order = Order.objects.filter(idempotency_key=idempotency_key).first()
+        if order:
+            return order
 
         cart = CartService.get_or_create_cart(CreateCartDTO(user=user, session_key=session_key))
 
         order = Order.objects.create(
             user=cart.user,
+            idempotency_key=idempotency_key,
             total_price=0,
             status="pending",
         )

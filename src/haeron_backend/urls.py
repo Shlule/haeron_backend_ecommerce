@@ -20,6 +20,7 @@ from django.urls import path, include
 from rest_framework_simplejwt.views import TokenRefreshView
 from strawberry.django.views import GraphQLView
 from django.views.decorators.csrf import csrf_exempt
+from haeron_guitar_api.payments.stripe_webhook import stripe_webhook
 
 from .schema import schema
 
@@ -50,5 +51,6 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("graphql/", csrf_exempt(AuthGraphQLView.as_view(schema=schema))),
     path("accounts/", include("allauth.account.urls")),
-    path("api/token/resfresh/", TokenRefreshView.as_view(), name="token)refresh"),
+    path("api/token/resfresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("api/payments/stripe/webhook/", stripe_webhook, name="stripe_webhook"),
 ]

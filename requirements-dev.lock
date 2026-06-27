@@ -22,8 +22,12 @@ asgiref==3.10.0
 attrs==26.1.0
     # via jsonschema
     # via referencing
+certifi==2026.6.17
+    # via requests
 cffi==2.0.0
     # via argon2-cffi-bindings
+charset-normalizer==3.4.7
+    # via requests
 click==8.3.1
     # via uvicorn
 colorama==0.4.6
@@ -33,6 +37,7 @@ django==5.2.8
     # via django-allauth
     # via django-choices-field
     # via django-cors-headers
+    # via django-extensions
     # via django-filter
     # via djangorestframework
     # via djangorestframework-simplejwt
@@ -44,6 +49,8 @@ django-choices-field==3.1.1
     # via haeron-backend-ecommerce
 django-cors-headers==4.9.0
     # via haeron-backend-ecommerce
+django-extensions==4.1
+    # via haeron-backend-ecommerce
 django-filter==25.2
     # via haeron-backend-ecommerce
 djangorestframework==3.17.1
@@ -54,6 +61,8 @@ graphql-core==3.2.7
     # via strawberry-graphql
 h11==0.16.0
     # via uvicorn
+idna==3.18
+    # via requests
 iniconfig==2.3.0
     # via pytest
 jsonschema==4.26.0
@@ -86,6 +95,8 @@ python-decouple==3.8
 referencing==0.37.0
     # via jsonschema
     # via jsonschema-specifications
+requests==2.34.2
+    # via stripe
 rpds-py==0.30.0
     # via jsonschema
     # via referencing
@@ -97,12 +108,17 @@ strawberry-graphql==0.287.1
     # via strawberry-graphql-django
 strawberry-graphql-django==0.67.2
     # via haeron-backend-ecommerce
+stripe==15.3.0
+    # via haeron-backend-ecommerce
 typing-extensions==4.15.0
     # via django-choices-field
     # via lia-web
     # via referencing
     # via strawberry-graphql
+    # via stripe
 tzdata==2025.2
     # via django
+urllib3==2.7.0
+    # via requests
 uvicorn==0.38.0
     # via haeron-backend-ecommerce
