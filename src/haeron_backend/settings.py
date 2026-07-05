@@ -30,6 +30,10 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+VAULT_ADDR = "http://vault:8200"
+VAULT_TOKEN = config("VAULT_TOKEN")
+VAULT_MOUNT_POINT = "secret"
+VAULT_TIMEOUT = 5
 
 # Application definition
 
