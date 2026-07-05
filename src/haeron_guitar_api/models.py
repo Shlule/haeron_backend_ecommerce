@@ -119,8 +119,33 @@ class Part(AuditMixin):
         related_name="instrument_parts",
     )
     part_model = models.ForeignKey("PartModel", on_delete=models.PROTECT)
-    auth_key = models.CharField(max_length=200, unique=True)
     is_master = models.BooleanField(default=False)
+
+
+class PartBatch(models.Model):
+    part_model = models.ForeignKey("PartModel", on_delete=models.CASCADE)
+    code = models.CharField(max_length=50)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class PartIdentity(models.Model):
+    part = models.ForeignKey("Part", related_name="part_identies", on_delete=models.CASCADE)
+    nfc_uid = models.CharField(max_length=32, unique=True, db_index=True, help_text="NFC tag UID")
+    vault_key_path = models.CharField(max_length=255)
+    batch = models.ForeignKey("PartBatch", on_delete=models.PROTECT)
+    key_version = models.IntegerField(default=1)
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ("active", "Active"),
+            ("revoked", "Revoked"),
+            ("rotated", "Rotated"),
+        ],
+        default="active",
+    )
+    binding_hash = models.CharField(max_length=128, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
 
 
 class Option(AuditMixin):
