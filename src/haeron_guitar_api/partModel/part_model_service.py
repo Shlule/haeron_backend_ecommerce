@@ -1,13 +1,12 @@
-from typing import List
-from uuid import UUID
-from decimal import Decimal
-from django.core.exceptions import ObjectDoesNotExist
-from ..models import PartModel, PartType, Series, Option, PartModelOption
+from haeron_guitar_api.security.vault.vault_service import VaultService
+from ..models import PartModel, PartType, Series, Option
 from .part_model_dto import CreatePartModelDTO, UpdatePartModelDTO
+from django.db import transaction
 
 
 class PartModelService:
     @staticmethod
+    @transaction.atomic
     def create(dto: CreatePartModelDTO) -> PartModel:
         try:
             part_type = PartType.objects.get(pk=dto.part_type_id)
