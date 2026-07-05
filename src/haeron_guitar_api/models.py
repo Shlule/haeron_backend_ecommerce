@@ -123,8 +123,23 @@ class Part(AuditMixin):
 
 
 class PartBatch(models.Model):
-    part_model = models.ForeignKey("PartModel", on_delete=models.CASCADE)
-    code = models.CharField(max_length=50)
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    part_model = models.ForeignKey("PartModel", on_delete=models.CASCADE, related_name="batches")
+
+    name = models.CharField(max_length=100)
+
+    vault_batch_key_path = models.CharField(max_length=255)
+
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ("active", "Active"),
+            ("revoked", "Revoked"),
+        ],
+        default="active",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
 
