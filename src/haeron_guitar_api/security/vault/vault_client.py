@@ -1,4 +1,5 @@
 import logging
+import secrets
 from typing import Any
 
 import hvac
@@ -48,9 +49,15 @@ class VaultClient:
         except hvac.exceptions.InvalidPath:
             raise VaultSecretNotFound(path)
 
+    def generate_key(self):
+        return secrets.token_bytes(32)
+
     def write_secret(self, path: str, secret: dict[str, Any]) -> None:
         try:
-            self.client.secrets.kv.v2.create_or_update_secret(path=path, mount_point=self.mount_point, secret=secret)
+            secret = self.client.secrets.kv.v2.create_or_update_secret(
+                path=path, mount_point=self.mount_point, secret=secret
+            )
+
             logger.info("Vault secret written at %s", path)
         except Exception as e:
             raise VaultWriteError(str(e))
