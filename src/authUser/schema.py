@@ -52,24 +52,21 @@ class UserQuery:
 
 @strawberry.type
 class UserMutation:
-
-
     @strawberry.mutation
     def signup(self, info, input: SignupInput) -> bool:
         request = info.context["request"]
 
         if User.objects.filter(username=input.user_name).exists():
             raise Exception("Username already in use")
-        
+
         if input.password != input.password_confirmation:
             raise Exception("Passwords do not match")
-            
+
         if input.email != input.email_confirmation:
             raise Exception("Email does not match")
 
         adapter = get_adapter(request)
         email = adapter.clean_email(input.email)
-
 
         if EmailAddress.objects.filter(email=email).exists():
             raise Exception("Email already exists")
@@ -83,16 +80,15 @@ class UserMutation:
 
         customer_group, created = Group.objects.get_or_create(name="customer")
         user.groups.add(customer_group)
-        
+
         user.username = input.user_name
         user.email = adapter.clean_email(input.email)
         user.set_password(input.password)
         user.save()
-        setup_user_email(request, user, []) 
+        setup_user_email(request, user, [])
 
         email_address = EmailAddress.objects.get(user=user, email=user.email)
         email_address.send_confirmation(request, signup=True)
-
 
         return True
 
@@ -107,7 +103,6 @@ class UserMutation:
             username=user.username,
             password=password,
         )
-        print(user.password)
         if not user:
             raise Exception("Invalid Credential")
 
@@ -125,7 +120,7 @@ class UserMutation:
 
         email.send_confirmation(info.context.request)
         return
-        
+
     @strawberry.mutation
     def reset_password_request(self, info, email: str) -> bool:
         form = ResetPasswordForm(data={"email": email})
@@ -151,7 +146,6 @@ class UserMutation:
         user.save()
         return True
 
-
     @strawberry.mutation
     def refresh_token(self, info: Info, refresh: str) -> TokenType:
         try:
@@ -161,8 +155,7 @@ class UserMutation:
             return TokenType(access=access, refresh=refresh)
         except Exception as e:
             raise Exception("Invalid refresh token")
-            
-            
+
     # @strawberry.mutation
     # def signin(self, info: Info, username: str, password: str) -> TokenType:
     #     user = authenticate(username=username, password=password)
@@ -175,7 +168,7 @@ class UserMutation:
     #     tokens = generate_tokens_for_user(user)
     #     return TokenType(access=tokens["access"], refresh=tokens["refresh"])
 
-    # @strawberry.mutation  
+    # @strawberry.mutation
     # def reset_password_request(self, info, email: str) -> bool:
     #     request = info.context["request"]
     #     form = ResetPasswordForm(data={"email": email})
@@ -184,7 +177,7 @@ class UserMutation:
     #         form.save(request)
 
     #     return True
-    
+
     # @strawberry.mutation
     # def confirm_password_reset(
     #     self,
@@ -213,7 +206,6 @@ class UserMutation:
 
     #     return True
 
-
     # @strawberry.mutation
     # def request_password_reset(self, info: Info, email: str) -> bool:
     #     try:
@@ -237,6 +229,7 @@ class UserMutation:
     #     user.set_password(new_password)
     #     user.save()
     #     return True
+
 
 UserMutation = UserMutation
 UserQuery = UserQuery
