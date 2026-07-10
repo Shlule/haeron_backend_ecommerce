@@ -119,6 +119,11 @@ class Part(AuditMixin):
         related_name="instrument_parts",
     )
     part_model = models.ForeignKey("PartModel", on_delete=models.PROTECT)
+    batch = models.ForeignKey(
+        "PartBatch",
+        related_name="parts",
+        on_delete=models.PROTECT,
+    )
     is_master = models.BooleanField(default=False)
 
 
@@ -128,6 +133,7 @@ class PartBatch(models.Model):
     part_model = models.ForeignKey("PartModel", on_delete=models.CASCADE, related_name="batches")
 
     name = models.CharField(max_length=100)
+    code = models.CharField(max_length=100)
 
     vault_batch_key_path = models.CharField(max_length=255)
 
