@@ -47,7 +47,7 @@ INSTALLED_APPS = [
     "django_extensions",
     "corsheaders",
     "rest_framework_simplejwt",
-    "authUser.apps.AuthuserConfig",
+    "rest_framework_simplejwt.token_blacklistauthUser.apps.AuthuserConfig",
     "haeron_guitar_api.apps.HaeronGuitarApiConfig",
     "allauth",
     "allauth.account",
@@ -89,7 +89,7 @@ CORS_ALLOW_METHODS = [
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(hours=4),
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
