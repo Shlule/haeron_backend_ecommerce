@@ -1,4 +1,4 @@
-from haeron_guitar_api.security.vault.vault_service import VaultService
+from haeron_guitar_api.security.vault.vault_factory import get_vault_service
 from ..models import PartModel, PartType, Series, Option
 from .part_model_dto import CreatePartModelDTO, UpdatePartModelDTO
 from django.db import transaction
@@ -23,7 +23,7 @@ class PartModelService:
         part_model = PartModel.objects.create(
             name=dto.name, part_type=part_type, series=series, price=dto.price, code=dto.code
         )
-        VaultService.create("domain", str(part_model.uuid))
+        get_vault_service.create("domain", str(part_model.uuid))
 
         return part_model
 

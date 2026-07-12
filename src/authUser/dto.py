@@ -1,11 +1,12 @@
 from dataclasses import dataclass
+from typing import Optional
+
 
 @dataclass
 class SignupDTO:
-    username: str
+    user_name: str
     email: str
-    email2: str
+    email_confirmation: str
     password: str
-    password2: str
-    phone: str
-
+    password_confirmation: str
+    phone: Optional[str] = None

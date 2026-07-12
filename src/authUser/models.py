@@ -11,15 +11,10 @@ class User(AbstractUser):
 
 
 class MFADevice(models.Model):
-    user = models.ForeignKey(User)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
 
     type = models.CharField(choices=[("totp", "TOTP"), ("webauthn", "WebAuthn")])
 
     secret = models.BinaryField()
 
     confirmed = models.BooleanField()
-
-
-class ServiceAccount(AbstractUser):
-    name = models.CharField(max_length=100)
-    cer

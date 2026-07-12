@@ -1,4 +1,6 @@
+from typing import Optional
 import strawberry
+
 
 @strawberry.input
 class SignupInput:
@@ -7,4 +9,4 @@ class SignupInput:
     email_confirmation: str
     password: str
     password_confirmation: str
-    phone: str
+    phone: Optional[str]

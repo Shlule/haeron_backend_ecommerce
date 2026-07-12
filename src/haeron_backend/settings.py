@@ -47,7 +47,7 @@ INSTALLED_APPS = [
     "django_extensions",
     "corsheaders",
     "rest_framework_simplejwt",
-    "rest_framework_simplejwt.token_blacklistauthUser.apps.AuthuserConfig",
+    "authUser",
     "haeron_guitar_api.apps.HaeronGuitarApiConfig",
     "allauth",
     "allauth.account",
@@ -129,6 +129,7 @@ ACCOUNT_SIGNUP_FIELDS = ["username*", "email*", "email2*", "password1*", "passwo
 ACCOUNT_CONFIRM_EMAIL_REDIRECT_URL = "https://localhost:3000/auth/login"
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+# EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 DEFAULT_FROM_EMAIL = "no-reply@example.com"
 
 SITE_ID = 1
