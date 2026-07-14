@@ -51,8 +51,19 @@ INSTALLED_APPS = [
     "haeron_guitar_api.apps.HaeronGuitarApiConfig",
     "allauth",
     "allauth.account",
+    "allauth.mfa",
     "django_filters",
 ]
+
+
+HEADLESS_FRONTEND_URLS = {
+    "account_confirm_email": "http://localhost:5173/account/verify-email/{key}",
+    "account_reset_password": "http://localhost:5173/account/reset-password/{key}",
+    "account_signup": "http://localhost:5173/account/signup",
+    "socialaccount_login_error": "http://localhost:5173/account/social/error",
+}
+
+HEADLESS_TOKEN_STRATEGY = ("allauth.headless.tokens.strategies.jwt.JWTTokenStrategy")
 
 STRAWBERRY_DJANGO = {
     "FIELD_DESCRIPTION_FROM_HELP_TEXT": True,
@@ -72,12 +83,19 @@ MIDDLEWARE = [
 ]
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework_simplejwt.authentication.JWTAuthentication",),
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
 }
 
 CORS_ALLOWED_ORIGINS = [
     "https://hoppscotch.io",  # si tu utilises la version web
     "http://localhost:5173",  # pour ton futur front
+]
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "https://hoppscotch.io",
 ]
 
 # Autoriser méthodes POST, OPTIONS
@@ -117,6 +135,10 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
+]
+
+MFA_SUPPORTED_TYPES = [
+    "totp",
 ]
 
 ACCOUNT_LOGIN_METHODS = {"username", "email"}
@@ -171,21 +193,6 @@ DATABASES = {
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
-
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
-    },
-]
 
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.Argon2PasswordHasher",

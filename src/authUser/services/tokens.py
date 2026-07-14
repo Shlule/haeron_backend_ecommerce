@@ -1,5 +1,8 @@
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
+from django.contrib.auth import get_user_model
+User = get_user_model()
+
 
 
 def generate_tokens(user):

@@ -50,7 +50,8 @@ class AuthGraphQLView(GraphQLView):
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("graphql/", csrf_exempt(AuthGraphQLView.as_view(schema=schema))),
-    path("accounts/", include("allauth.account.urls")),
     path("api/token/resfresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/payments/stripe/webhook/", stripe_webhook, name="stripe_webhook"),
+    # path("accounts/", include("allauth.urls")),
+    # path("accounts/mfa", include("allauth.mfa.urls")),
 ]

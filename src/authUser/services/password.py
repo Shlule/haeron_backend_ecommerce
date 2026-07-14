@@ -43,7 +43,6 @@ def confirm_password_reset(uid, key, new_password):
         raise Exception(form.errors)
 
     form.save()
-    logout(user)
     revoke_user_refresh_tokens(user)
 
     return True
