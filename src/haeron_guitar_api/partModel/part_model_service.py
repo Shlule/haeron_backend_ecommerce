@@ -23,7 +23,7 @@ class PartModelService:
         part_model = PartModel.objects.create(
             name=dto.name, part_type=part_type, series=series, price=dto.price, code=dto.code
         )
-        get_vault_service.create("domain", str(part_model.uuid))
+        get_vault_service.post_secret("domain", str(part_model.uuid))
 
         return part_model
 
