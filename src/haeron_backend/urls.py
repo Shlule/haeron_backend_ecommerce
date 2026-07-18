@@ -27,6 +27,8 @@ from .schema import schema
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth.models import AnonymousUser
 
+from provisionning_agent.views import AgentEnrollView
+
 
 def get_context(request):
     user = AnonymousUser()
@@ -52,6 +54,7 @@ urlpatterns = [
     path("graphql/", csrf_exempt(AuthGraphQLView.as_view(schema=schema))),
     path("api/token/resfresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/payments/stripe/webhook/", stripe_webhook, name="stripe_webhook"),
+    path("agents/enroll/", AgentEnrollView.as_view(), name="agent-enroll"),
     # path("accounts/", include("allauth.urls")),
     # path("accounts/mfa", include("allauth.mfa.urls")),
 ]

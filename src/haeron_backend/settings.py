@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "rest_framework_simplejwt",
     "authUser",
+    "provisionning_agent",
     "haeron_guitar_api.apps.HaeronGuitarApiConfig",
     "allauth",
     "allauth.account",

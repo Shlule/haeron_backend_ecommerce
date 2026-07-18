@@ -151,14 +151,13 @@ class PartBatch(models.Model):
 
 class PartNFCIdentity(models.Model):
     part = models.ForeignKey("Part", related_name="part_identies", on_delete=models.CASCADE)
-    nfc_uid = models.CharField(max_length=32, unique=True, db_index=True, help_text="NFC tag UID")
-    vault_key_path = models.CharField(max_length=255)
+    nfc_uid = models.CharField(max_length=32,  db_index=True, help_text="NFC tag UID")
     batch = models.ForeignKey("PartBatch", on_delete=models.PROTECT)
     key_version = models.IntegerField(default=1)
     status = models.CharField(
         max_length=20,
-        choices=[("active", "Active"), ("revoked", "Revoked"), ("rotated", "Rotated"), ("error", "error")],
-        default="active",
+        choices=[("active", "Active"),("pending", "Pending"), ("revoked", "Revoked"), ("rotated", "Rotated"), ("error", "error")],
+        default="pending",
     )
     binding_hash = models.CharField(max_length=128, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)

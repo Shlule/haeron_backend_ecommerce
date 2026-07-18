@@ -3,7 +3,7 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 from uuid import UUID, uuid4
 
-from ..models import Part, PartModel, Factory, InstrumentType, PartBatch
+from ..models import Part, PartModel, Factory, InstrumentType, PartBatch, PartNFCIdentity
 from .part_dto import CreatePartDTO, UpdatePartDTO
 from ..serial_counter.serial_counter_service import SerialCounterService
 from haeron_guitar_api.security.vault.vault_factory import get_vault_service
