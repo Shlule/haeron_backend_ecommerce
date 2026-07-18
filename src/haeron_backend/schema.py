@@ -13,6 +13,27 @@ from haeron_guitar_api.part_history.part_history_resolver import PartHistoryQuer
 from haeron_guitar_api.part.part_resolver import PartMutation, PartQuery
 from haeron_guitar_api.serial_counter.serial_counter_resolver import SerialCounterQuery,SerialCounterMutation
 
+
+import os
+from django.conf import settings
+from strawberry.extensions import QueryDepthLimiter, MaxAliasesLimiter, MaxTokensLimiter
+from strawberry.extensions import DisableIntrospection
+
+extensions = [
+    QueryDepthLimiter(max_depth=10),      # bloque les queries imbriquées à l'infini
+    MaxAliasesLimiter(max_alias_count=15), # bloque le abus d'alias (N requêtes déguisées en 1)
+    MaxTokensLimiter(max_token_count=1000),# proxy simple de "complexité" via la taille du document
+]
+
+if not settings.DEBUG:
+    extensions.append(DisableIntrospection())
+
+schema = strawberry.Schema(
+    query=UserQuery,
+    mutation=UserMutation,
+    extensions=extensions,
+)
+
 @strawberry.type
 class Query(UserQuery,
             InstrumentQuery,
