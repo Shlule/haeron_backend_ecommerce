@@ -8,12 +8,3 @@ class User(AbstractUser):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-
-class MFADevice(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-
-    type = models.CharField(choices=[("totp", "TOTP"), ("webauthn", "WebAuthn")])
-
-    secret = models.BinaryField()
-
-    confirmed = models.BooleanField()
