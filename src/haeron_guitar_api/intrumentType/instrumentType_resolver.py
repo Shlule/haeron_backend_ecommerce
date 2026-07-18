@@ -8,8 +8,6 @@ from .instrumentType_dto import CreateInstrumentTypeDTO
 from .instrumentType_input import CreateInstrumentTypeInput, InstrumentTypeFilterInput
 from .instrumentType_filter import InstrumentTypeFilterSet
 from .instrumentType_service import InstrumentTypeService
-from ..permissions.authenticateJwt import IsAuthenticated
-from ..permissions.groupPermission import HasRoleFactory
 from ..types.types import InstrumentTypeGQLType
 
 

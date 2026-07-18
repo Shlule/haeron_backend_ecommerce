@@ -11,6 +11,7 @@ from .input import SignupInput
 
 from .dto import SignupDTO
 from .types import TokenType
+from authUser.permission.permission import HasRole, IsAuthenticated
 
 from .services.email import resend_verification_email, verify_email
 from .services.signup import signup_customer, signup_user_with_role
@@ -65,7 +66,7 @@ class UserMutation:
         signup_customer(info.context["request"], dto=dto)
         return True
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin", "admin")])
     def signup_with_role(self, info: Info, input: SignupInput, role: str) -> bool:
         request = info.context["request"]
         if not request.user.is_authenticated or not request.user.groups.filter(name="admin").exists():
