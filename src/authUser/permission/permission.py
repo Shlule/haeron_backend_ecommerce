@@ -1,5 +1,4 @@
 # permissions.py
-import strawberry
 from strawberry.permission import BasePermission
 from strawberry.types import Info
 
@@ -11,14 +10,15 @@ class IsAuthenticated(BasePermission):
         return info.context["request"].user.is_authenticated
 
 
-class HasRole(BasePermission):
-    def __init__(self, *roles):
-        self.roles = roles
-        self.message = f"Requires role: {', '.join(roles)}"
+def HasRole(*roles):
+    class _HasRole(BasePermission):
+        message = f"Requires role: {', '.join(roles)}"
 
-    def has_permission(self, source, info: Info, **kwargs) -> bool:
-        request = info.context["request"]
-        return (
-            request.user.is_authenticated
-            and request.user.groups.filter(name__in=self.roles).exists()
-        )
+        def has_permission(self, source, info: Info, **kwargs):
+            user = info.context["request"].user
+            return (
+                user.is_authenticated
+                and user.groups.filter(name__in=roles).exists()
+            )
+
+    return _HasRole
