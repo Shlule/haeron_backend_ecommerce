@@ -27,6 +27,10 @@ panier / commande, et traçabilité des pièces par tag NFC adossée à Vault.
 
 ## Installation
 
+> **Note** — ces étapes ont été écrites à partir de `pyproject.toml` et
+> `.python-version`, mais n'ont pas été exécutées de bout en bout. Si l'une
+> d'elles coince, la corriger ici au passage.
+
 ```bash
 # 1. dépendances
 uv sync
