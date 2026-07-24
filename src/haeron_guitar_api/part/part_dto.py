@@ -9,7 +9,6 @@ class CreatePartDTO:
     factory_id: UUID
     instrument_type_id: UUID
     owner_id: Optional[UUID] = None
-    auth_key: Optional[str] = ""
     is_master: bool = False
 
 

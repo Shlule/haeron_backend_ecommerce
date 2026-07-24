@@ -9,12 +9,13 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied, NotFound
 
-from .models import ProvisioningAgent, AgentEnrollmentToken
+from .models import ProvisionningAgent, AgentEnrollmentToken
 from .authentication import AgentTokenAuthentication
 
 
 from haeron_guitar_api.models import  Part
-from haeron_guitar_api.part.part_service import PartService, PartIdentityMismatch, PartIdentityAlreadyProvisioned
+from haeron_guitar_api.exceptions import PartIdentityMismatch, PartIdentityAlreadyProvisioned
+from haeron_guitar_api.part.part_service import PartService
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ class AgentEnrollView(APIView):
             raise AuthenticationFailed("Token d'enrôlement invalide ou expiré")
 
         agent = enrollment.agent
-        real_token, real_hash = ProvisioningAgent.generate_token()
+        real_token, real_hash = ProvisionningAgent.generate_token()
         agent.key_hash = real_hash
         agent.is_active = True
         agent.enrolled_at = timezone.now()
@@ -59,7 +60,7 @@ class ProvisionIdentityView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        agent: ProvisioningAgent = request.user
+        agent: ProvisionningAgent = request.user
         serial_number = request.data["serial_number"]
         part = request.data["part"]
         

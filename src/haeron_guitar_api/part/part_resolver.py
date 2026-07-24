@@ -27,7 +27,6 @@ class PartMutation:
         dto = CreatePartDTO(
             factory_id=input.factory_id,
             instrument_type_id=input.instrument_type_id,
-            auth_key=input.auth_key,
             part_model_id=input.part_model_id,
             owner_id=input.owner_id,
             is_master=input.is_master,

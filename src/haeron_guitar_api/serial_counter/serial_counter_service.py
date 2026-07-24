@@ -7,27 +7,34 @@ from uuid import UUID
 
 class SerialCounterService:
     @staticmethod
-    @transaction.atomic()
+    @transaction.atomic
     def next(factory_id: UUID) -> int:
-        today = timezone.localdate()
 
-        counter, created = SerialCounter.objects.select_for_update().get_or_create(
-            factory=factory_id,
-            date=today,
-            defaults={"value": 0},
+        year = timezone.now().year
+
+        counter, created = (
+            SerialCounter.objects
+            .select_for_update()
+            .get_or_create(
+                factory_id=factory_id,
+                year=year,
+                defaults={
+                    "last_value": 0
+                },
+            )
         )
 
         counter.last_value += 1
         counter.save(update_fields=["last_value"])
 
-        return counter.last_value
+        return counter.last_value, counter.year
 
     @staticmethod
     def get_or_create_today(factory_id: UUID) -> SerialCounter:
         factory = Factory.objects.get(pk=factory_id)
-        today = timezone.localdate()
+        year = timezone.now().year
 
-        counter, created = SerialCounter.objects.get_or_create(factory=factory, date=today)
+        counter, created = SerialCounter.objects.get_or_create(factory=factory, year=year)
 
         return counter
 

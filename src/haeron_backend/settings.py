@@ -91,7 +91,12 @@ REST_FRAMEWORK = {
 
 CORS_ALLOWED_ORIGINS = [
     "https://hoppscotch.io",  # si tu utilises la version web
-    "http://localhost:5173",  # pour ton futur front
+    "http://localhost:5173",
+    
+]
+
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.trycloudflare\.com$",
 ]
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8000",

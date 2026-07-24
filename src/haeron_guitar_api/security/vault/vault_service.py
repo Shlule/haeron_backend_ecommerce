@@ -12,6 +12,13 @@ logger = logging.getLogger(__name__)
 class VaultService:
     def __init__(self, client: VaultClient | None = None):
         self.client = client or get_vault_client()
+        self._SCOPES = {
+        "domain": lambda ids:
+            f"{config('VAULT_DOMAIN_ROOT')}/{ids['part_model_id']}",
+
+        "batch": lambda ids:
+            f"{config('VAULT_DOMAIN_ROOT')}/{ids['part_model_id']}/{config('VAULT_BATCH_ROOT')}/{ids['batch_id']}",
+    }
 
     def get_vault_path(self, secret_type: str, **scope_ids):
         if secret_type not in self._SCOPES:

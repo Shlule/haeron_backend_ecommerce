@@ -33,15 +33,18 @@ from provisionning_agent.views import AgentEnrollView
 def get_context(request):
     user = AnonymousUser()
     try:
+        
         auth = JWTAuthentication()
         header = auth.get_header(request)
+        raw_token = auth.get_raw_token(header)
         if header is not None:
-            validated_token = auth.get_validated_token(header)
+            validated_token = auth.get_validated_token(raw_token)
             user = auth.get_user(validated_token)
+            request.user = user
     except Exception:
         pass
 
-    return {"request": request, "user": user}
+    return {"request": request}
 
 
 class AuthGraphQLView(GraphQLView):

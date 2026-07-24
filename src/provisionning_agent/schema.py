@@ -1,11 +1,12 @@
 import secrets
 import hashlib
 import logging
-from django.utils import timezone, timedelta
+from django.utils import timezone
+from datetime import timedelta
 import strawberry
 from strawberry.types import Info
 
-from .models import ProvisioningAgent, AgentEnrollmentToken
+from .models import ProvisionningAgent, AgentEnrollmentToken
 
 from authUser.permission.permission import HasRole, IsAuthenticated
 
@@ -17,12 +18,11 @@ class CreateAgentResult:
     bootstrap_token: str
 
 @strawberry.type
-class UserMutation:
+class AgentMutation:
     @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin")])
-    def create_provisioning_agent(self, info: Info, name: str, allowed_models: list[str]) -> CreateAgentResult:
-        agent = ProvisioningAgent.objects.create(
+    def create_provisioning_agent(self, info: Info, name: str) -> CreateAgentResult:
+        agent = ProvisionningAgent.objects.create(
             name=name,
-            allowed_models=allowed_models,
             created_by=info.context["request"].user,
         )
         token = secrets.token_urlsafe(32)
@@ -34,4 +34,4 @@ class UserMutation:
         logger.info("Agent %s créé par %s", agent.name, info.context["request"].user.username)
         return CreateAgentResult(agent_id=agent.id, bootstrap_token=token)
     
-UserMutation = UserMutation
+AgentMutation = AgentMutation

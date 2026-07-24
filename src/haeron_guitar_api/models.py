@@ -67,8 +67,7 @@ class InstrumentModel(models.Model):
 class PartType(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=50, unique=True)
-    code = models.CharField(max_length=10, unique=True)
-    instrument_types = models.ManyToManyField("InstrumentType", related_name="part_types", blank=True)
+    code = models.CharField(max_length=5, unique=True)
 
     def __str__(self):
         return self.name
@@ -76,7 +75,7 @@ class PartType(models.Model):
 
 class PartModel(AuditMixin):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    code = models.CharField(max_length=50, unique=True)
+    code = models.CharField(max_length=5, unique=True)
     name = models.CharField(max_length=100)
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
     part_type = models.ForeignKey("PartType", on_delete=models.PROTECT)
@@ -89,7 +88,7 @@ class PartModel(AuditMixin):
 class PartModelOption(AuditMixin):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=100)
+    code = models.CharField(max_length=20)
     part_model = models.ForeignKey("PartModel", on_delete=models.CASCADE)
     option = models.ForeignKey("Option", on_delete=models.CASCADE)
     price_delta = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
@@ -133,7 +132,7 @@ class PartBatch(models.Model):
     part_model = models.ForeignKey("PartModel", on_delete=models.CASCADE, related_name="batches")
 
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=100)
+    code = models.CharField(max_length=5)
 
     vault_batch_key_path = models.CharField(max_length=255)
 
@@ -141,17 +140,19 @@ class PartBatch(models.Model):
         max_length=20,
         choices=[
             ("active", "Active"),
+            ("ended", "Ended"),
             ("revoked", "Revoked"),
         ],
         default="active",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
 
 
 class PartNFCIdentity(models.Model):
     part = models.ForeignKey("Part", related_name="part_identies", on_delete=models.CASCADE)
-    nfc_uid = models.CharField(max_length=32,  db_index=True, help_text="NFC tag UID")
+    nfc_uid = models.CharField(max_length=32, db_index=True, help_text="NFC tag UID")
     batch = models.ForeignKey("PartBatch", on_delete=models.PROTECT)
     key_version = models.IntegerField(default=1)
     status = models.CharField(
@@ -174,24 +175,26 @@ class Option(AuditMixin):
 class SerialCounter(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     factory = models.ForeignKey("Factory", on_delete=models.CASCADE)
-    date = models.DateField()
+    year = models.PositiveIntegerField()
     last_value = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ("factory", "date")
+        unique_together = [
+            ("factory", "year")
+        ]
 
 
 class Series(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True)
-    code = models.CharField(max_length=10, unique=True)
+    code = models.CharField(max_length=5, unique=True)
 
 
 class Factory(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    code = models.CharField(max_length=10, unique=True)
+    code = models.CharField(max_length=5, unique=True)
     name = models.CharField(max_length=100)
 
 
@@ -256,7 +259,7 @@ class ComponentCompatibility(models.Model):
 class ProductSchema(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=100)
+    code = models.CharField(max_length=50)
 
 
 class Cart(models.Model):

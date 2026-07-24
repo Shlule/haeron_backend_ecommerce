@@ -2,7 +2,7 @@ import hashlib
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from django.utils import timezone
-from .models import ProvisioningAgent
+from .models import ProvisionningAgent
 
 
 class AgentTokenAuthentication(BaseAuthentication):
@@ -12,8 +12,8 @@ class AgentTokenAuthentication(BaseAuthentication):
             return None
         token_hash = hashlib.sha256(auth_header.removeprefix("Bearer ").encode()).hexdigest()
         try:
-            agent = ProvisioningAgent.objects.get(key_hash=token_hash, is_active=True)
-        except ProvisioningAgent.DoesNotExist:
+            agent = ProvisionningAgent.objects.get(key_hash=token_hash, is_active=True)
+        except ProvisionningAgent.DoesNotExist:
             raise AuthenticationFailed("Invalid agent token")
         agent.last_seen = timezone.now()
         agent.save(update_fields=["last_seen"])

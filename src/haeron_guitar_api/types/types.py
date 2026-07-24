@@ -23,7 +23,7 @@ class AuditInterface:
 class SerialCounterGQLType:
     uuid: ID
     factory: "FactoryGQLType"
-    date: date
+    year: str
     last_value: int
 
 
@@ -91,9 +91,7 @@ class PartHistoryGQLType:
 class PartGQLType:
     uuid: ID
     serial_number: str
-    auth_key: Optional[str]
     part_model: PartModelGQLType
-    auth_key: str
     part_history: Optional[List["PartHistoryGQLType"]]
     is_master: bool
 

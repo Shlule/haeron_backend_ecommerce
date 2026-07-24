@@ -68,11 +68,6 @@ class UserMutation:
 
     @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin", "admin")])
     def signup_with_role(self, info: Info, input: SignupInput, role: str) -> bool:
-        request = info.context["request"]
-        if not request.user.is_authenticated or not request.user.groups.filter(name="admin").exists():
-            raise Exception("Not authorized")
-        if role in ("admin", "superadmin"):
-            raise Exception("Cannot self-assign this role")
         dto = SignupDTO(
             user_name=input.user_name,
             email=input.email,

@@ -3,7 +3,7 @@ from django.conf import settings
 import secrets, hashlib
 
 
-class ProvisioningAgent(models.Model):
+class ProvisionningAgent(models.Model):
     name = models.CharField(max_length=100)
     key_hash = models.CharField(max_length=64, null=True, blank=True)  # vide tant que non enrôlé
     is_active = models.BooleanField(default=False)  # actif seulement après enrôlement réussi
@@ -19,18 +19,8 @@ class ProvisioningAgent(models.Model):
 
 
 class AgentEnrollmentToken(models.Model):
-    agent = models.OneToOneField(ProvisioningAgent, on_delete=models.CASCADE)
+    agent = models.OneToOneField(ProvisionningAgent, on_delete=models.CASCADE)
     token_hash = models.CharField(max_length=64)
     expires_at = models.DateTimeField()
     used = models.BooleanField(default=False)
     
-class ProvisionedTag(models.Model):
-    agent = models.ForeignKey(ProvisioningAgent, on_delete=models.PROTECT, related_name="tags")
-    uid = models.CharField(max_length=14)  # UID NTAG 424 DNA en hex, 7 octets
-    model = models.CharField(max_length=50)
-    batch = models.CharField(max_length=50)
-    provisioned_at = models.DateTimeField(auto_now_add=True)
-    keys_snapshot = models.JSONField()  # les clés dérivées renvoyées, pour idempotence
-
-    class Meta:
-        unique_together = ("agent", "uid")
