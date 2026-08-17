@@ -50,6 +50,7 @@ class PartService:
             owner=owner,
             is_master=dto.is_master,
             batch=batch,
+            production_snapshot=dto.production_snapshot
         )
 
         SerialCounterService.next(dto.factory_id)

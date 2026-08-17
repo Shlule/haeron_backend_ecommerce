@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Optional, Any
 from uuid import UUID
 
 
@@ -10,6 +10,7 @@ class CreatePartDTO:
     instrument_type_id: UUID
     owner_id: Optional[UUID] = None
     is_master: bool = False
+    production_snapshot: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

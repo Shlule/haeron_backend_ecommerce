@@ -104,6 +104,7 @@ class PartGQLType:
     part_model: PartModelGQLType
     part_history: Optional[List["PartHistoryGQLType"]]
     part_identities: Optional[List["PartNfcIdentityGQLType"]]
+    production_snapshot: strawberry.scalars.JSON
     is_master: bool
 
 

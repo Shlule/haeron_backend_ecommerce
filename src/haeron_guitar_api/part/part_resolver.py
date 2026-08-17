@@ -30,6 +30,7 @@ class PartMutation:
             part_model_id=input.part_model_id,
             owner_id=input.owner_id,
             is_master=input.is_master,
+            production_snapshot=input.production_snapshot
         )
         return PartService.create(dto)
 

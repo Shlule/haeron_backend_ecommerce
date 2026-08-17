@@ -1,4 +1,5 @@
 import strawberry
+from strawberry.scalars import JSON
 from uuid import UUID
 from typing import Optional
 
@@ -10,6 +11,7 @@ class CreatePartInput:
     instrument_type_id: UUID
     owner_id: Optional[UUID] = None
     is_master: bool = False
+    production_snapshot: JSON = strawberry.field(default_factory=dict)
 
 
 @strawberry.input

@@ -124,6 +124,12 @@ class Part(AuditMixin):
         on_delete=models.PROTECT,
     )
     is_master = models.BooleanField(default=False)
+    production_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+
 class PartSecurityMark(models.Model):
     uuid = models.UUIDField(
         primary_key=True,
@@ -189,7 +195,7 @@ class PartBatch(models.Model):
 
 
 class PartNFCIdentity(models.Model):
-    part = models.ForeignKey("Part", related_name="part_identies", on_delete=models.CASCADE)
+    part = models.ForeignKey("Part", related_name="part_identities", on_delete=models.CASCADE)
     nfc_uid = models.CharField(max_length=32, db_index=True, help_text="NFC tag UID")
     batch = models.ForeignKey("PartBatch", on_delete=models.PROTECT)
     key_version = models.IntegerField(default=1)
@@ -198,7 +204,8 @@ class PartNFCIdentity(models.Model):
         choices=[("active", "Active"),("pending", "Pending"), ("revoked", "Revoked"), ("rotated", "Rotated"), ("error", "error")],
         default="pending",
     )
-    binding_hash = models.CharField(max_length=128, unique=True)
+    last_seen_counter = models.PositiveBigIntegerField(null=True, blank=True)
+    last_verified_at = models.DateTimeField(null= True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
 

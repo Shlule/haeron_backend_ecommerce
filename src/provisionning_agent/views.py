@@ -5,6 +5,7 @@ from django.core.cache import cache
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied, NotFound
 
 from .models import ProvisionningAgent, AgentEnrollmentToken
@@ -12,6 +13,7 @@ from .authentication import AgentTokenAuthentication
 
 from haeron_guitar_api.part.part_service import PartService
 from haeron_guitar_api.models import Part
+from .selectors import get_part_for_verification, build_verification_response, verification_response_to_dict
 
 logger = logging.getLogger(__name__)
 
@@ -100,15 +102,28 @@ class ProvisionIdentityView(APIView):
 #                     "part_model": str(part.part_model.uuid),
 #                     "batch": str(part.batch.uuid),
 #                 })
+
 class GetPartInfo(APIView):
     authentication_classes = [AgentTokenAuthentication]
-    permission_classes= []
-    
+    permission_classes = []
+
     def get(self, request, serial_number):
-        part = Part.objects.filter(serial_number = serial_number).first()
-        return Response({
-                    "uuid": str(part.uuid),
-                    "serial_number": part.serial_number,
-                    "part_model": str(part.part_model.uuid),
-                    "batch": str(part.batch.uuid),
-                })
+        part = get_part_for_verification(serial_number)
+        if part is None:
+            return Response(
+                {
+                    "status": "failed",
+                    "detail": "Part not found.",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+
+        response_dto = build_verification_response(
+            part=part,
+        )
+
+        return Response(
+            verification_response_to_dict(response_dto),
+            status=status.HTTP_200_OK,
+        )
