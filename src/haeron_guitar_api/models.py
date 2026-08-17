@@ -124,7 +124,45 @@ class Part(AuditMixin):
         on_delete=models.PROTECT,
     )
     is_master = models.BooleanField(default=False)
+class PartSecurityMark(models.Model):
+    uuid = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False
+    )
 
+    part = models.ForeignKey(
+        "Part",
+        related_name="security_marks",
+        on_delete=models.CASCADE
+    )
+
+    mark_type = models.CharField(
+        max_length=50,
+        choices=[
+            ("laser_engraving", "Laser engraving"),
+            ("qr_code", "QR Code"),
+        ]
+    )
+
+    value = models.CharField(
+        max_length=255,
+        help_text="The visible identifier"
+    )
+
+    location = models.CharField(
+        max_length=255,
+        help_text="Physical location of the mark"
+    )
+
+    description = models.TextField(
+        blank=True,
+        help_text="Additional information about the mark"
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
 
 class PartBatch(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

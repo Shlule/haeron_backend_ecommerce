@@ -6,7 +6,6 @@ from django.db.models import Max
 import logging
 
 from ..tag.sdm import validate_plain_sun
-# from .binding import compute_binding_hash
 
 from ..models import Part, PartModel, Factory, InstrumentType, PartBatch, PartNFCIdentity
 from .part_dto import CreatePartDTO, UpdatePartDTO
@@ -109,14 +108,14 @@ class PartService:
 
     # TODO finish this method
     @staticmethod
-    def provideNFCIdentity(part_serial_number, part_p: Part, nfc_uid_p=None):
+    def provideNFCIdentity(part_serial_number, part_uuid_p: str, nfc_uid_p=None):
 
         part = (
             Part.objects.select_related("batch", "part_model")
-            .prefetch_related("part_entities")
+            .prefetch_related("part_identities")
             .get(serial_number=part_serial_number)
         )
-        if part != part_p:
+        if str(part.uuid) != part_uuid_p:
             logger.error("condition does not match")
             return
 
@@ -124,9 +123,10 @@ class PartService:
             (identity for identity in part.part_identities.all() if identity.status == "active"),
             None,
         )
+        
 
         if active_identity:
-            logger.error("aleready provided")
+            logger.error("allready provided")
             return
 
         nfc_uid = nfc_uid_p if nfc_uid_p else uuid4()
@@ -177,7 +177,6 @@ def verify_part_authenticity(serial_number: str, nfc_uid_hex: str, ctr_hex: str,
         if identity.part.serial_number != serial_number:
             return False
 
-        # ... vérification binding_hash comme vu précédemment ...
 
         vault_service = get_vault_service()
         domain_key = vault_service.get_secret(
@@ -205,6 +204,8 @@ def verify_part_authenticity(serial_number: str, nfc_uid_hex: str, ctr_hex: str,
         if result["read_ctr"] <= identity.last_seen_counter:
             return False  # rejeu détecté
 
+
+    #TODO - use the last_verified at. 
         identity.last_seen_counter = result["read_ctr"]
         identity.save(update_fields=["last_seen_counter"])
 

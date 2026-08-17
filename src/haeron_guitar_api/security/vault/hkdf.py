@@ -5,7 +5,7 @@ from cryptography.hazmat.primitives import hashes
 class HKDFService:
     @staticmethod
     def derive_tag_key(domain_key: bytes, batch_key: bytes, uid: str, key_version:int, length: int = 16) -> bytes:
-        if not uid or not uid.strip():
+        if not uid :
             raise ValueError("UID cannot be empty")
         hkdf_service = HKDFService()
         info = f"ntag424:{uid}{key_version}".encode()

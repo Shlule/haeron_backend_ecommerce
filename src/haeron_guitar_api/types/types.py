@@ -27,6 +27,15 @@ class SerialCounterGQLType:
     last_value: int
 
 
+@strawberry_django.type(models.PartNFCIdentity)
+class PartNfcIdentityGQLType:
+    id: ID
+    part: "PartGQLType"
+    nfc_uid: str
+    status: str
+    created_at: datetime
+    revoked_at: datetime
+
 @strawberry_django.type(models.Series)
 class SeriesGQLType:
     uuid: ID
@@ -54,6 +63,7 @@ class PartTypeGQLType:
     name: str
     code: str
     instrument_types: List["InstrumentTypeGQLType"]
+    
 
 
 @strawberry_django.type(models.PartModelOption)
@@ -93,6 +103,7 @@ class PartGQLType:
     serial_number: str
     part_model: PartModelGQLType
     part_history: Optional[List["PartHistoryGQLType"]]
+    part_identities: Optional[List["PartNfcIdentityGQLType"]]
     is_master: bool
 
 

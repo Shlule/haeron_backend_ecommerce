@@ -1,8 +1,6 @@
 import hashlib
 import logging 
 from django.utils import timezone
-from django.db import transaction
-from django.db.models import F
 from django.core.cache import cache
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -12,10 +10,8 @@ from rest_framework.exceptions import AuthenticationFailed, PermissionDenied, No
 from .models import ProvisionningAgent, AgentEnrollmentToken
 from .authentication import AgentTokenAuthentication
 
-
-from haeron_guitar_api.models import  Part
-from haeron_guitar_api.exceptions import PartIdentityMismatch, PartIdentityAlreadyProvisioned
 from haeron_guitar_api.part.part_service import PartService
+from haeron_guitar_api.models import Part
 
 logger = logging.getLogger(__name__)
 
@@ -57,13 +53,16 @@ class AgentEnrollView(APIView):
 
 class ProvisionIdentityView(APIView):
     authentication_classes = [AgentTokenAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = []
 
     def post(self, request):
         agent: ProvisionningAgent = request.user
         serial_number = request.data["serial_number"]
-        part = request.data["part"]
+        part = request.data["part_uuid"]
         
+        print(")"*50)
+        print(request.data)
+        print(part)
 
         # quota atomique, comme vu précédemment — avant d'appeler le service,
         # pour ne jamais dériver une clé sans qu'elle compte dans le quota
@@ -76,7 +75,7 @@ class ProvisionIdentityView(APIView):
         #         raise PermissionDenied("Quota de provisioning atteint pour cet agent")
 
         # try:
-        tag_id, tag_key = PartService.provideNFCIdentity(serial_number, part, agent=agent)
+        tag_id, tag_key = PartService.provideNFCIdentity(serial_number, part)
         # except PartIdentityAlreadyProvisioned:
         #     # idempotence : l'agent a peut-être retenté après une coupure réseau
         #     existing = part.part_identities.filter(status__in=("pending", "active")).first()
@@ -89,3 +88,27 @@ class ProvisionIdentityView(APIView):
         if tag_id and tag_key:
             return Response({"tag_id": str(tag_id), "tag_key": tag_key.hex()})
         return None
+# class GetPartInfo(APIView):
+#     authentication_classes = [AgentTokenAuthentication]
+#     permission_classes= []
+    
+#     def get(self, request, serial_number):
+#         part = Part.objects.filter(serial_number = serial_number).first()
+#         return Response({
+#                     "uuid": str(part.uuid),
+#                     "serial_number": part.serial_number,
+#                     "part_model": str(part.part_model.uuid),
+#                     "batch": str(part.batch.uuid),
+#                 })
+class GetPartInfo(APIView):
+    authentication_classes = [AgentTokenAuthentication]
+    permission_classes= []
+    
+    def get(self, request, serial_number):
+        part = Part.objects.filter(serial_number = serial_number).first()
+        return Response({
+                    "uuid": str(part.uuid),
+                    "serial_number": part.serial_number,
+                    "part_model": str(part.part_model.uuid),
+                    "batch": str(part.batch.uuid),
+                })

@@ -10,7 +10,8 @@ class AgentTokenAuthentication(BaseAuthentication):
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
             return None
-        token_hash = hashlib.sha256(auth_header.removeprefix("Bearer ").encode()).hexdigest()
+        cleaned_token = auth_header.removeprefix("Bearer ").strip(" ")
+        token_hash = hashlib.sha256(cleaned_token.encode()).hexdigest()
         try:
             agent = ProvisionningAgent.objects.get(key_hash=token_hash, is_active=True)
         except ProvisionningAgent.DoesNotExist:
