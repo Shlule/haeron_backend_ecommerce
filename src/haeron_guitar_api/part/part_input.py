@@ -11,7 +11,7 @@ class CreatePartInput:
     instrument_type_id: UUID
     owner_id: Optional[UUID] = None
     is_master: bool = False
-    production_snapshot: JSON = strawberry.field(default_factory=dict)
+    production_snapshot: Optional[JSON] = None
 
 
 @strawberry.input

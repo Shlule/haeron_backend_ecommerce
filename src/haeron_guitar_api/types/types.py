@@ -33,6 +33,7 @@ class PartNfcIdentityGQLType:
     part: "PartGQLType"
     nfc_uid: str
     status: str
+    key_version: int
     created_at: datetime
     revoked_at: datetime
 

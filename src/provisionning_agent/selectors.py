@@ -142,9 +142,11 @@ def build_part_identity(part):
 def build_part_options(part):
     snapshot = part.production_snapshot or {}
 
+    print("#"*50)
+    print(snapshot)
     return [
         PartOptionSelectionDTO(
-            uuid=item["part_model_option_uuid"],
+            uuid=item["uuid"],
             option=OptionDTO(
                 uuid=item["option"]["uuid"],
                 name=item["option"]["name"],

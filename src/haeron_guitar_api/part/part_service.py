@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.db import transaction
-from uuid import UUID, uuid4
+from uuid import UUID
 from django.db.models import Max
 import logging
 
@@ -108,63 +108,246 @@ class PartService:
         return part
 
     # TODO finish this method
+    # FIXME remove test_run Later. 
     @staticmethod
-    def provideNFCIdentity(part_serial_number, part_uuid_p: str, nfc_uid_p=None):
+    def provideNFCIdentity(part_serial_number, part_uuid_p: str, nfc_uid_p=None, test_run=False):
 
         part = (
-            Part.objects.select_related("batch", "part_model")
-            .prefetch_related("part_identities")
+            Part.objects
+            .select_related("batch", "part_model")
             .get(serial_number=part_serial_number)
         )
+
         if str(part.uuid) != part_uuid_p:
             logger.error("condition does not match")
-            return
+            return {}
 
-        active_identity = next(
-            (identity for identity in part.part_identities.all() if identity.status == "active"),
-            None,
+        active_identity = (
+            PartNFCIdentity.objects
+            .filter(part=part, status="active")
+            .first()
         )
         
-
         if active_identity:
             logger.error("allready provided")
-            return
+            return {}
 
-        nfc_uid = nfc_uid_p if nfc_uid_p else uuid4()
+        last_revoked_identity = (
+            PartNFCIdentity.objects
+            .filter(part=part, status="revoked")
+            .order_by("-created_at")
+            .first()
+        )
+
+
 
         new_version = (
-            PartNFCIdentity.objects.filter(part=part, nfc_uid=nfc_uid).aggregate(Max("key_version"))["key_version__max"]
+            PartNFCIdentity.objects.filter(part=part, nfc_uid=nfc_uid_p).aggregate(Max("key_version"))["key_version__max"]
             or 0
         ) + 1
 
         part_model_id = part.part_model.uuid
         part_batch_id = part.batch.uuid
 
-        vault_service = get_vault_service()
-        tag_key = HKDFService.derive_tag_key(
-            vault_service.get_secret(
-                vault_service.get_vault_path("domain", part_model_id=part_model_id),
-            ),
-            vault_service.get_secret(
-                vault_service.get_vault_path("batch", part_model_id=part_model_id, batch_id=part_batch_id)
-            ),
-            nfc_uid,
-            new_version,
-        )
+        if not test_run:
+            vault_service = get_vault_service()
+            tag_key = HKDFService.derive_tag_key(
+                vault_service.get_secret(
+                    vault_service.get_vault_path("domain", part_model_id=part_model_id),
+                ),
+                vault_service.get_secret(
+                    vault_service.get_vault_path("batch", part_model_id=part_model_id, batch_id=part_batch_id)
+                ),
+                nfc_uid_p,
+                new_version,
+            )
+            
+            # get the old key for changing it in provisionning agent
+            if new_version > 1:
+                old_version = new_version -1
+                old_tag_key = HKDFService.derive_tag_key(
+                vault_service.get_secret(
+                    vault_service.get_vault_path("domain", part_model_id=part_model_id),
+                ),
+                vault_service.get_secret(
+                    vault_service.get_vault_path("batch", part_model_id=part_model_id, batch_id=part_batch_id)
+                ),
+                nfc_uid_p,
+                old_version,
+            )
+            else: 
+                if not last_revoked_identity:
+                    old_tag_key = bytes(16)
+                # the old key if we change the tag uid. 
+                else: 
+                    old_tag_key = HKDFService.derive_tag_key(
+                    vault_service.get_secret(
+                        vault_service.get_vault_path("domain", part_model_id=part_model_id),
+                    ),
+                    vault_service.get_secret(
+                        vault_service.get_vault_path("batch", part_model_id=part_model_id, batch_id=part_batch_id)
+                    ),
+                    last_revoked_identity.nfc_uid,
+                    last_revoked_identity.key_version,
+                )
 
-        PartNFCIdentity.objects.create(part=part, batch=part.batch, key_version=new_version)
+        else: 
+            tag_key = bytes(16)
+            old_tag_key = bytes(16)
 
-        return nfc_uid, tag_key
+        PartNFCIdentity.objects.create(part=part, batch=part.batch, nfc_uid=nfc_uid_p, key_version=new_version)
+
+        return {"tag_key":tag_key,"old_tag_key": old_tag_key, "new_version": new_version}
 
     @staticmethod
-    def confirmNFCIdentity(part_serial_number, part_p: Part, nfc_uid):
-        pass
+    def confirmNFCIdentity(part_serial_number: str, part_uuid_p: str, nfc_uid: str):
+        print("je suisd ans le part service .")
+        try:
+            part = (
+                Part.objects
+                .get(serial_number=part_serial_number)
+            )
+        except Part.DoesNotExist:
+            logger.error(
+                "Part not found",
+                extra={"serial_number": part_serial_number}
+            )
+            return {
+                "status": "error",
+                "message": "La pièce n'existe pas."
+            }
+
+        # Vérification de l'identité de la pièce
+        if str(part.uuid) != part_uuid_p:
+            logger.error(
+                "Part UUID does not match",
+                extra={
+                    "serial_number": part_serial_number,
+                    "part_uuid": part_uuid_p,
+                }
+            )
+            return {
+                "status": "error",
+                "message": "L'identité de la pièce ne correspond pas."
+            }
+
+        # Récupération du dernier NFC en attente
+        pending_identity = (
+            PartNFCIdentity.objects
+            .filter(
+                part=part,
+                status="pending",
+            )
+            .order_by("-created_at")
+            .first()
+        )
+
+        if not pending_identity:
+            logger.error(
+                "No pending NFC identity found",
+                extra={
+                    "part_uuid": part_uuid_p,
+                    "nfc_uid": nfc_uid,
+                }
+            )
+            return {
+                "status": "error",
+                "message": "Aucun tag NFC en attente de confirmation."
+            }
+
+        # Vérification que le NFC reçu correspond bien au NFC en attente
+        if pending_identity.nfc_uid != nfc_uid:
+            logger.error(
+                "NFC UID does not match",
+                extra={
+                    "expected_nfc_uid": pending_identity.nfc_uid,
+                    "provided_nfc_uid": nfc_uid,
+                }
+            )
+            return {
+                "status": "error",
+                "message": "Le tag NFC ne correspond pas au tag en attente."
+            }
+
+        # Confirmation du tag
+        pending_identity.status = "active"
+        pending_identity.save(update_fields=["status"])
+
+        return {
+            "status": "success",
+            "message": "Le tag NFC a bien été confirmé."
+        }
+
+    @staticmethod
+    def revokeNFCIdentity(part_serial_number: str, part_uuid_p: str, nfc_uid: str):
+        try:
+            part = (
+                Part.objects
+                .get(serial_number=part_serial_number)
+            )
+        except Part.DoesNotExist:
+            logger.error(
+                "Part not found",
+                extra={"serial_number": part_serial_number}
+            )
+            return {
+                "status": "error",
+                "message": "La pièce n'existe pas."
+            }
+
+        # Vérification supplémentaire de l'identité de la pièce
+        if str(part.uuid) != part_uuid_p:
+            logger.error(
+                "Part UUID does not match",
+                extra={
+                    "serial_number": part_serial_number,
+                    "expected_uuid": str(part.uuid),
+                    "provided_uuid": part_uuid_p,
+                }
+            )
+            return {
+                "status": "error",
+                "message": "L'identité de la pièce ne correspond pas."
+            }
+
+        # On cherche précisément le tag NFC fourni
+        active_identity = (
+            PartNFCIdentity.objects
+            .filter(
+                part=part,
+                nfc_uid=nfc_uid,
+                status="active",
+            )
+            .first()
+        )
+
+        if not active_identity:
+            logger.error(
+                "No active NFC identity found",
+                extra={
+                    "part_uuid": part_uuid_p,
+                    "nfc_uid": nfc_uid,
+                }
+            )
+            return {
+                "status": "error",
+                "message": "Aucun tag NFC actif correspondant n'a été trouvé."
+            }
+
+        # Révocation
+        active_identity.status = "revoked"
+        active_identity.save(update_fields=["status"])
+
+        return {
+            "status": "success",
+            "message": "Le tag a bien été révoqué."
+        }
 
 
 logger = logging.getLogger(__name__)
 
-
-def verify_part_authenticity(serial_number: str, nfc_uid_hex: str, ctr_hex: str, cmac_hex: str) -> bool:
+# FIXME - remove le test_run 
+def verify_part_authenticity(serial_number: str, nfc_uid_hex: str, ctr_hex: str, cmac_hex: str, test_run=False) -> bool:
     with transaction.atomic():
         try:
             identity = (
@@ -178,19 +361,21 @@ def verify_part_authenticity(serial_number: str, nfc_uid_hex: str, ctr_hex: str,
         if identity.part.serial_number != serial_number:
             return False
 
-
-        vault_service = get_vault_service()
-        domain_key = vault_service.get_secret(
-            vault_service.get_vault_path("domain", part_model_id=identity.part.part_model.uuid)
-        )
-        batch_key = vault_service.get_secret(
-            vault_service.get_vault_path(
-                "batch", part_model_id=identity.part.part_model.uuid, batch_id=identity.batch.uuid
+        if not test_run:
+            vault_service = get_vault_service()
+            domain_key = vault_service.get_secret(
+                vault_service.get_vault_path("domain", part_model_id=identity.part.part_model.uuid)
             )
-        )
-        tag_key = HKDFService.derive_tag_key(
-            domain_key, batch_key, str(identity.tag_id), key_version=identity.key_version
-        )
+            batch_key = vault_service.get_secret(
+                vault_service.get_vault_path(
+                    "batch", part_model_id=identity.part.part_model.uuid, batch_id=identity.batch.uuid
+                )
+            )
+            tag_key = HKDFService.derive_tag_key(
+                domain_key, batch_key, str(identity.tag_id), key_version=identity.key_version
+            )
+        else: 
+            tag_key = bytes(16)
 
         try:
             result = validate_plain_sun(

@@ -14,6 +14,7 @@ from .authentication import AgentTokenAuthentication
 from haeron_guitar_api.part.part_service import PartService
 from haeron_guitar_api.models import Part
 from .selectors import get_part_for_verification, build_verification_response, verification_response_to_dict
+from haeron_guitar_api.models import PartNFCIdentity
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,7 @@ class ProvisionIdentityView(APIView):
         agent: ProvisionningAgent = request.user
         serial_number = request.data["serial_number"]
         part = request.data["part_uuid"]
+        nfc_uid = request.data["nfc_uid"]
         
         print(")"*50)
         print(request.data)
@@ -77,7 +79,12 @@ class ProvisionIdentityView(APIView):
         #         raise PermissionDenied("Quota de provisioning atteint pour cet agent")
 
         # try:
-        tag_id, tag_key = PartService.provideNFCIdentity(serial_number, part)
+        already_provisioned = PartNFCIdentity.objects.filter(part=part).exists()
+        
+        result = PartService.provideNFCIdentity(serial_number, part, nfc_uid_p=nfc_uid, test_run=True)
+        tag_key = result.get("tag_key", None)
+        old_tag_key = result.get("old_tag_key",None)
+        version = result.get("version", None)
         # except PartIdentityAlreadyProvisioned:
         #     # idempotence : l'agent a peut-être retenté après une coupure réseau
         #     existing = part.part_identities.filter(status__in=("pending", "active")).first()
@@ -85,30 +92,48 @@ class ProvisionIdentityView(APIView):
         # except PartIdentityMismatch as e:
         #     raise PermissionDenied(str(e))
 
-        # logger.info("Identité NFC générée pour part %s par agent %s", serial_number, agent.name)
+        logger.info("Identité NFC générée pour part %s par agent %s", serial_number, agent.name)
 
-        if tag_id and tag_key:
-            return Response({"tag_id": str(tag_id), "tag_key": tag_key.hex()})
+        if old_tag_key and tag_key:
+            return Response({"tag_key": tag_key.hex(), "old_tag_key": old_tag_key.hex(), "version": version, "is_rewrite": already_provisioned})
         return None
-# class GetPartInfo(APIView):
-#     authentication_classes = [AgentTokenAuthentication]
-#     permission_classes= []
-    
-#     def get(self, request, serial_number):
-#         part = Part.objects.filter(serial_number = serial_number).first()
-#         return Response({
-#                     "uuid": str(part.uuid),
-#                     "serial_number": part.serial_number,
-#                     "part_model": str(part.part_model.uuid),
-#                     "batch": str(part.batch.uuid),
-#                 })
 
-class GetPartInfo(APIView):
+
+class ConfirmProvisionningView(APIView):
     authentication_classes = [AgentTokenAuthentication]
     permission_classes = []
 
+    def post(self, request):
+        agent: ProvisionningAgent = request.user
+        serial_number = request.data["serial_number"]
+        part = request.data["part_uuid"]
+        nfc_uid = request.data["nfc_uid"]
+        print("je suis dans le confirm identity. view. ")
+
+        result = PartService.confirmNFCIdentity(serial_number,part,nfc_uid)
+        return result
+
+class RevokProvisionningView(APIView):
+    authentication_classes = [AgentTokenAuthentication]
+    permission_classes = []
+
+    def post(self, request):
+        agent: ProvisionningAgent = request.user
+        serial_number = request.data["serial_number"]
+        part = request.data["part_uuid"]
+        nfc_uid = request.data["nfc_uid"]
+
+        result = PartService.revokeNFCIdentityNFCIdentity(serial_number,part,nfc_uid)
+        return result
+
+class GetPartInfo(APIView):
+    authentication_classes = []
+    permission_classes = []
+
     def get(self, request, serial_number):
+        
         part = get_part_for_verification(serial_number)
+        print(part)
         if part is None:
             return Response(
                 {
