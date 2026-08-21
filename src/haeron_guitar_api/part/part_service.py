@@ -139,8 +139,6 @@ class PartService:
             .first()
         )
 
-
-
         new_version = (
             PartNFCIdentity.objects.filter(part=part, nfc_uid=nfc_uid_p).aggregate(Max("key_version"))["key_version__max"]
             or 0
@@ -197,7 +195,7 @@ class PartService:
 
         PartNFCIdentity.objects.create(part=part, batch=part.batch, nfc_uid=nfc_uid_p, key_version=new_version)
 
-        return {"tag_key":tag_key,"old_tag_key": old_tag_key, "new_version": new_version}
+        return {"tag_key":tag_key,"old_tag_key": old_tag_key, "version": new_version}
 
     @staticmethod
     def confirmNFCIdentity(part_serial_number: str, part_uuid_p: str, nfc_uid: str):

@@ -4,9 +4,10 @@ from django.utils import timezone
 from django.core.cache import cache
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework import status
-from rest_framework.exceptions import AuthenticationFailed, PermissionDenied, NotFound
+from authUser.permission.permission import HasRole
+from rest_framework.exceptions import AuthenticationFailed
 
 from .models import ProvisionningAgent, AgentEnrollmentToken
 from .authentication import AgentTokenAuthentication
@@ -111,9 +112,12 @@ class ConfirmProvisionningView(APIView):
         print("je suis dans le confirm identity. view. ")
 
         result = PartService.confirmNFCIdentity(serial_number,part,nfc_uid)
-        return result
+        return Response(
+            result,
+            status=status.HTTP_200_OK,
+        )
 
-class RevokProvisionningView(APIView):
+class RevokeProvisionningView(APIView):
     authentication_classes = [AgentTokenAuthentication]
     permission_classes = []
 
@@ -123,8 +127,11 @@ class RevokProvisionningView(APIView):
         part = request.data["part_uuid"]
         nfc_uid = request.data["nfc_uid"]
 
-        result = PartService.revokeNFCIdentityNFCIdentity(serial_number,part,nfc_uid)
-        return result
+        result = PartService.revokeNFCIdentity(serial_number,part,nfc_uid)
+        return Response(
+            result,
+            status=status.HTTP_200_OK,
+        )
 
 class GetPartInfo(APIView):
     authentication_classes = []

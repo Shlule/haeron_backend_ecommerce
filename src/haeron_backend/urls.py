@@ -27,7 +27,7 @@ from .schema import schema
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth.models import AnonymousUser
 
-from provisionning_agent.views import AgentEnrollView, ConfirmProvisionningView, RevokProvisionningView, ProvisionIdentityView, GetPartInfo
+from provisionning_agent.views import AgentEnrollView, ConfirmProvisionningView, RevokeProvisionningView, ProvisionIdentityView, GetPartInfo
 
 
 def get_context(request):
@@ -60,7 +60,7 @@ urlpatterns = [
     path("agents/enroll/", AgentEnrollView.as_view(), name="agent-enroll"),
     path("agents/provision-identity/", ProvisionIdentityView.as_view(), name="provision_identity"),
     path("agents/confirm-identity/", ConfirmProvisionningView.as_view(), name="confirm_identity"),
-    path("agents/revoke-identity/", RevokProvisionningView.as_view(), name="revoke_identity"),
+    path("agents/revoke-identity/", RevokeProvisionningView.as_view(), name="revoke_identity"),
     path("agents/part-info/<str:serial_number>/", GetPartInfo.as_view(), name="get_part_info" )
     # path("accounts/", include("allauth.urls")),
     # path("accounts/mfa", include("allauth.mfa.urls")),
