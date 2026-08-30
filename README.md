@@ -49,3 +49,5 @@ tester avec hoppscotch le login
 `admin, created = Group.objects.get_or_create(name="admin")`
 `user.groups.add(role, super_admin)`
 
+
+## Enroll agent. 

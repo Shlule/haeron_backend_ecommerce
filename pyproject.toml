@@ -28,7 +28,6 @@ dependencies = [
     "faker>=40.28.1",
     "pyotp>=2.10.0",
 ]
-readme = "README.md"
 requires-python = ">= 3.12"
 
 [build-system]
@@ -51,4 +50,4 @@ python_files = ["tests.py", "test_*.py", "*_tests.py"]
 testpaths = ["src"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/haeron_backend_ecommerce"]
+packages = ["src/haeron_backend"]
