@@ -28,7 +28,11 @@ stripe.api_key = config("STRIPE_SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ALLOWED_HOSTS = [
+    host.strip()
+    for host in config("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if host.strip()
+]
 
 VAULT_ADDR = "http://localhost:8200"
 VAULT_TOKEN = config("VAULT_TOKEN")
