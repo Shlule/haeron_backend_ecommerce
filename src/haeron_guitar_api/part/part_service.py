@@ -88,7 +88,7 @@ class PartService:
         current_year = serial_counter.year
         next_value = serial_value + 1
 
-        return f"{str(factory.code)}{instrument_type_code}-{part_model.code}{str(current_year)}-{str(batch_code)}{str(next_value)}"
+        return f"{str(factory.code)}{instrument_type_code}-{part_model.code}{str(current_year)}-{str(batch_code)}{str(next_value).zfill(4)}"
 
     @staticmethod
     def update(part: Part, dto: UpdatePartDTO) -> Part:

@@ -47,7 +47,7 @@ CACHES = {
 VAULT_ADDR = config("VAULT_ADDR", default="http://vault:8200")
 VAULT_TOKEN = config("VAULT_TOKEN")
 VAULT_MOUNT_POINT = config("VAULT_MOUNT_POINT", default="secret")
-VAULT_TIMEOUT = config.int("VAULT_TIMEOUT", default=5)
+VAULT_TIMEOUT = config("VAULT_TIMEOUT", default=5)
 
 # Application definition
 

@@ -32,7 +32,7 @@ class InstrumentHistory(AuditMixin):
 class InstrumentType(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=50, unique=True)
-    code = models.CharField(max_length=10, unique=True)
+    code = models.CharField(max_length=2, unique=True)
 
     def __str__(self):
         return self.name
@@ -239,7 +239,7 @@ class Series(models.Model):
 
 class Factory(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    code = models.CharField(max_length=5, unique=True)
+    code = models.CharField(max_length=3, unique=True)
     name = models.CharField(max_length=100)
 
 
