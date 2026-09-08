@@ -9,3 +9,9 @@ wheels/
 # venv
 .venv
 .env
+
+jwt-private.pem
+jwt-public.pem
+keys/
+
+setup_preconfig/

@@ -27,6 +27,7 @@ dependencies = [
     "factory-boy>=3.3.3",
     "faker>=40.28.1",
     "pyotp>=2.10.0",
+    "django-redis>=7.0.0",
 ]
 requires-python = ">= 3.12"
 

@@ -28,16 +28,26 @@ stripe.api_key = config("STRIPE_SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ALLOWED_HOSTS = [
+ALLOWED_HOSTS = [
     host.strip()
     for host in config("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
     if host.strip()
 ]
 
-VAULT_ADDR = "http://localhost:8200"
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://redis:6379/0",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+    },
+}
+
+VAULT_ADDR = config("VAULT_ADDR", default="http://vault:8200")
 VAULT_TOKEN = config("VAULT_TOKEN")
-VAULT_MOUNT_POINT = "secret"
-VAULT_TIMEOUT = 5
+VAULT_MOUNT_POINT = config("VAULT_MOUNT_POINT", default="secret")
+VAULT_TIMEOUT = config.int("VAULT_TIMEOUT", default=5)
 
 # Application definition
 
