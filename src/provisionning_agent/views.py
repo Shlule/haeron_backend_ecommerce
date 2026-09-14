@@ -6,14 +6,12 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework import status
-from authUser.permission.permission import HasRole
 from rest_framework.exceptions import AuthenticationFailed
 
 from .models import ProvisionningAgent, AgentEnrollmentToken
 from .authentication import AgentTokenAuthentication
 
 from haeron_guitar_api.part.part_service import PartService
-from haeron_guitar_api.models import Part
 from .selectors import get_part_for_verification, build_verification_response, verification_response_to_dict
 from haeron_guitar_api.models import PartNFCIdentity
 
@@ -64,10 +62,6 @@ class ProvisionIdentityView(APIView):
         serial_number = request.data["serial_number"]
         part = request.data["part_uuid"]
         nfc_uid = request.data["nfc_uid"]
-        
-        print(")"*50)
-        print(request.data)
-        print(part)
 
         # quota atomique, comme vu précédemment — avant d'appeler le service,
         # pour ne jamais dériver une clé sans qu'elle compte dans le quota

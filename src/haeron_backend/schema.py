@@ -14,6 +14,7 @@ from haeron_guitar_api.part.part_resolver import PartMutation, PartQuery
 from haeron_guitar_api.serial_counter.serial_counter_resolver import SerialCounterQuery,SerialCounterMutation
 
 from provisionning_agent.schema import AgentMutation
+from engraving_agent.schema import EngravingMutation
 
 import os
 from django.conf import settings
@@ -66,6 +67,7 @@ class Mutation(UserMutation,
                 PartModelOptionMutation,
                 SerialCounterMutation,
                 AgentMutation,
+                EngravingMutation,
                 ):
     pass
 
