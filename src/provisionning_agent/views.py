@@ -132,6 +132,10 @@ class GetPartInfo(APIView):
     permission_classes = []
 
     def get(self, request, serial_number):
+
+        cmac = request.get("cmac")
+        nfc_uid = request.get("nfc_uid")
+        tag_counter = request.get("tag_counter")
         
         part = get_part_for_verification(serial_number)
         print(part)
@@ -140,6 +144,16 @@ class GetPartInfo(APIView):
                 {
                     "status": "failed",
                     "detail": "Part not found.",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        part_validation = PartService.verify_part_authenticity(serial_number, nfc_uid, tag_counter, cmac)
+        if not part_validation: 
+            return Response(
+                {
+                    "status": "failed",
+                    "detail": "Validation failed",
                 },
                 status=status.HTTP_404_NOT_FOUND,
             )

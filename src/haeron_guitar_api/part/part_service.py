@@ -342,55 +342,55 @@ class PartService:
         }
 
 
-logger = logging.getLogger(__name__)
 
 # FIXME - remove le test_run 
-def verify_part_authenticity(serial_number: str, nfc_uid_hex: str, ctr_hex: str, cmac_hex: str, test_run=False) -> bool:
-    with transaction.atomic():
-        try:
-            identity = (
-                PartNFCIdentity.objects.select_for_update()
-                .select_related("part__part_model", "batch")
-                .get(nfc_uid=nfc_uid_hex, status="active")
-            )
-        except PartNFCIdentity.DoesNotExist:
-            return False
-
-        if identity.part.serial_number != serial_number:
-            return False
-
-        if not test_run:
-            vault_service = get_vault_service()
-            domain_key = vault_service.get_secret(
-                vault_service.get_vault_path("domain", part_model_id=identity.part.part_model.uuid)
-            )
-            batch_key = vault_service.get_secret(
-                vault_service.get_vault_path(
-                    "batch", part_model_id=identity.part.part_model.uuid, batch_id=identity.batch.uuid
+    def verify_part_authenticity(serial_number: str, nfc_uid_hex: str, ctr_hex: str, cmac_hex: str, test_run=False) -> bool:
+        with transaction.atomic():
+            try:
+                identity = (
+                    PartNFCIdentity.objects.select_for_update()
+                    .select_related("part__part_model", "batch")
+                    .get(nfc_uid=nfc_uid_hex, status="active")
                 )
-            )
-            tag_key = HKDFService.derive_tag_key(
-                domain_key, batch_key, str(identity.tag_id), key_version=identity.key_version
-            )
-        else: 
-            tag_key = bytes(16)
+            except PartNFCIdentity.DoesNotExist:
+                return False
 
-        try:
-            result = validate_plain_sun(
-                bytes.fromhex(nfc_uid_hex),
-                bytes.fromhex(ctr_hex),
-                bytes.fromhex(cmac_hex),
-                tag_key,
-            )
-        except ValueError:
-            return False
+            if identity.part.serial_number != serial_number:
+                return False
 
-        if result["read_ctr"] <= identity.last_seen_counter:
-            return False  # rejeu détecté
+            if not test_run:
+                vault_service = get_vault_service()
+                domain_key = vault_service.get_secret(
+                    vault_service.get_vault_path("domain", part_model_id=identity.part.part_model.uuid)
+                )
+                batch_key = vault_service.get_secret(
+                    vault_service.get_vault_path(
+                        "batch", part_model_id=identity.part.part_model.uuid, batch_id=identity.batch.uuid
+                    )
+                )
+                tag_key = HKDFService.derive_tag_key(
+                    domain_key, batch_key, str(identity.tag_id), key_version=identity.key_version
+                )
+            else: 
+                tag_key = bytes(16)
+
+            try:
+                result = validate_plain_sun(
+                    bytes.fromhex(nfc_uid_hex),
+                    bytes.fromhex(ctr_hex),
+                    bytes.fromhex(cmac_hex),
+                    tag_key,
+                )
+            except ValueError:
+                return False
+
+            if result["read_ctr"] <= identity.last_seen_counter:
+                return False  # rejeu détecté
 
 
-    #TODO - use the last_verified at. 
-        identity.last_seen_counter = result["read_ctr"]
-        identity.save(update_fields=["last_seen_counter"])
+        #TODO - use the last_verified at. 
+            identity.last_seen_counter = result["read_ctr"]
+            identity.save(update_fields=["last_seen_counter"])
 
-    return True
+        return True
+logger = logging.getLogger(__name__)
