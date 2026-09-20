@@ -26,7 +26,7 @@ SECRET_KEY = config("SECRET_KEY")
 stripe.api_key = config("STRIPE_SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = [
     host.strip()
@@ -34,15 +34,15 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "redis://redis:6379/0",
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        },
-    },
-}
+# CACHES = {
+#     "default": {
+#         "BACKEND": "django_redis.cache.RedisCache",
+#         "LOCATION": "redis://redis:6379/0",
+#         "OPTIONS": {
+#             "CLIENT_CLASS": "django_redis.client.DefaultClient",
+#         },
+#     },
+# }
 
 VAULT_ADDR = config("VAULT_ADDR", default="http://vault:8200")
 VAULT_TOKEN = config("VAULT_TOKEN")
@@ -104,20 +104,12 @@ REST_FRAMEWORK = {
     ),
 }
 
-CORS_ALLOWED_ORIGINS = [
-    "https://hoppscotch.io",  # si tu utilises la version web
-    "http://localhost:5173",
-    
-]
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:5173').split(',')
 
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https://.*\.trycloudflare\.com$",
 ]
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "https://hoppscotch.io",
-]
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='http://localhost:8000,http://127.0.0.1:8000').split(',')
 
 # Autoriser méthodes POST, OPTIONS
 CORS_ALLOW_METHODS = [
@@ -169,9 +161,17 @@ ACCOUNT_RATE_LIMITS = {"login_failed": "5/5m"}
 # ACCOUNT_LOGIN_ATTEMPTS_TIMEOUT = 300
 ACCOUNT_EMAIL_VERIFICATION = "mandatory"
 ACCOUNT_SIGNUP_FIELDS = ["username*", "email*", "email2*", "password1*", "password2*"]
-ACCOUNT_CONFIRM_EMAIL_REDIRECT_URL = "https://localhost:3000/auth/login"
+ACCOUNT_CONFIRM_EMAIL_REDIRECT_URL = config('ACCOUNT_CONFIRM_EMAIL_REDIRECT_URL', default='http://localhost:3000/auth/login')
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = config('EMAIL_HOST', default='')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='no-reply@example.com')
+
 # EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 DEFAULT_FROM_EMAIL = "no-reply@example.com"
 

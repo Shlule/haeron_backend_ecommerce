@@ -33,12 +33,7 @@ dans le shell de l'app lancer un commande django pour creer un super user
 `User = get_user_model()`
 `user = User.objects.get(email="ton@email.com")`
 ``` 
-mail_address = EmailAddress.objects.create(
-...     user=user,
-...     email="test@example.com",
-...     verified=True,
-...     primary=True,
-... )
+mail_address = EmailAddress.objects.create(user=user,email="test@example.com",verified=True,primary=True)
 ```
 
 tester avec hoppscotch le login 
