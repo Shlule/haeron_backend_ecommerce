@@ -127,15 +127,16 @@ class RevokeProvisionningView(APIView):
             status=status.HTTP_200_OK,
         )
 
-class GetPartInfo(APIView):
+class VerifyPart(APIView):
     authentication_classes = []
     permission_classes = []
 
-    def get(self, request, serial_number):
+    def post(self, request):
 
-        cmac = request.get("cmac")
-        nfc_uid = request.get("nfc_uid")
-        tag_counter = request.get("tag_counter")
+        serial_number = request.data.get("serial_number")
+        cmac = request.data.get("cmac")
+        nfc_uid = request.data.get("nfc_uid")
+        tag_counter = request.data.get("tag_counter")
         
         part = get_part_for_verification(serial_number)
         print(part)
