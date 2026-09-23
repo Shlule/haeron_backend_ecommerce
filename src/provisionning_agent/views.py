@@ -62,6 +62,7 @@ class ProvisionIdentityView(APIView):
         serial_number = request.data["serial_number"]
         part = request.data["part_uuid"]
         nfc_uid = request.data["nfc_uid"]
+        initial_counter = request.data["initial_counter"]
 
         # quota atomique, comme vu précédemment — avant d'appeler le service,
         # pour ne jamais dériver une clé sans qu'elle compte dans le quota
@@ -76,7 +77,7 @@ class ProvisionIdentityView(APIView):
         # try:
         already_provisioned = PartNFCIdentity.objects.filter(part=part).exists()
         
-        result = PartService.provideNFCIdentity(serial_number, part, nfc_uid_p=nfc_uid, test_run=True)
+        result = PartService.provideNFCIdentity(serial_number, part, nfc_uid_p=nfc_uid, initial_counter=initial_counter)
         tag_key = result.get("tag_key", None)
         old_tag_key = result.get("old_tag_key",None)
         version = result.get("version", None)
@@ -103,7 +104,6 @@ class ConfirmProvisionningView(APIView):
         serial_number = request.data["serial_number"]
         part = request.data["part_uuid"]
         nfc_uid = request.data["nfc_uid"]
-        print("je suis dans le confirm identity. view. ")
 
         result = PartService.confirmNFCIdentity(serial_number,part,nfc_uid)
         return Response(
@@ -137,9 +137,9 @@ class VerifyPart(APIView):
         cmac = request.data.get("cmac")
         nfc_uid = request.data.get("nfc_uid")
         tag_counter = request.data.get("tag_counter")
+
         
         part = get_part_for_verification(serial_number)
-        print(part)
         if part is None:
             return Response(
                 {

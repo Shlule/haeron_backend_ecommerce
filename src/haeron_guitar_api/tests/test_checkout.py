@@ -39,5 +39,3 @@ def test_checkout_create_order(user, cart, cartItem):
 
     assert len(items) == 1
 
-    pprint(order.uuid)
-    pprint(items)

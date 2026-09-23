@@ -142,8 +142,6 @@ class CartItemServiceTest(TestCase):
         CartItemService.add_item(dto1, user=self.user)
         item = CartItemService.add_item(dto2, user=self.user)
 
-        print("#" * 50)
-        pprint(item.config_snapshot)
 
         self.assertEqual(CartItem.objects.count(), 1)
         self.assertEqual(item.quantity, 2)

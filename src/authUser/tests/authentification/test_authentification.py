@@ -1,4 +1,3 @@
-from pprint import pprint
 import pytest
 from django.core import mail
 from allauth.account.models import EmailAddress

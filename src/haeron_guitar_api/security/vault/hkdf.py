@@ -6,21 +6,13 @@ class HKDFService:
     @staticmethod
     def derive_tag_key(domain_key: bytes, batch_key: bytes, uid: str, key_version:int, length: int = 16) -> bytes:
         if not uid :
+            ("l'id nest pas fournie")
             raise ValueError("UID cannot be empty")
-        hkdf_service = HKDFService()
         info = f"ntag424:{uid}{key_version}".encode()
-
-        return hkdf_service._derive_key(
-            key=domain_key,
-            salt=batch_key,
-            info=info,
-            length=length,
-        )
-
-    def _derive_key(self, key: bytes, salt: bytes, info: bytes, length: int = 16) -> bytes:
         return HKDF(
-            algorithm=hashes.SHA256(),
-            length=length,
-            salt=salt,
-            info=info,
-        ).derive(key)
+                    algorithm=hashes.SHA256(),
+                    length=length,
+                    salt=batch_key,
+                    info=info,
+                ).derive(domain_key)
+        

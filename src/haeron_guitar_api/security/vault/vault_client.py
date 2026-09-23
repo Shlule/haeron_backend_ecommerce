@@ -31,7 +31,11 @@ class VaultClient:
             authenticated = self.client.is_authenticated()
 
         except Exception as e:
-            raise VaultConnectionError(str(e))
+
+            raise VaultConnectionError(
+                f"is_authenticated() a échoué : "
+                f"{type(e).__name__}: {str(e)}"
+            ) from e
 
         if not authenticated:
             raise VaultAuthenticationError("Invalid Vault Token")
@@ -43,10 +47,15 @@ class VaultClient:
         return self.client.is_authenticated()
 
     def read_secret(self, path: str) -> dict[str, Any]:
+        print("je suis dans le readsecret")
         try:
+            print("jai trouver le path")
+            print(path)
             response = self.client.secrets.kv.v2.read_secret_version(path=path, mount_point=self.mount_point)
             return response.get("data", {}).get("data", {})
         except hvac.exceptions.InvalidPath:
+            print("je n'ai pas trouver le path")
+            print(path)
             raise VaultSecretNotFound(path)
 
     def generate_key(self):

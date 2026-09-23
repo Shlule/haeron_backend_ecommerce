@@ -110,7 +110,7 @@ class PartService:
     # TODO finish this method
     # FIXME remove test_run Later. 
     @staticmethod
-    def provideNFCIdentity(part_serial_number, part_uuid_p: str, nfc_uid_p=None, test_run=False):
+    def provideNFCIdentity(part_serial_number, part_uuid_p: str, nfc_uid_p=None, initial_counter=None, test_run=False):
 
         part = (
             Part.objects
@@ -193,13 +193,12 @@ class PartService:
             tag_key = bytes(16)
             old_tag_key = bytes(16)
 
-        PartNFCIdentity.objects.create(part=part, batch=part.batch, nfc_uid=nfc_uid_p, key_version=new_version)
+        PartNFCIdentity.objects.create(part=part, batch=part.batch, nfc_uid=nfc_uid_p, last_seen_counter=initial_counter, key_version=new_version)
 
         return {"tag_key":tag_key,"old_tag_key": old_tag_key, "version": new_version}
 
     @staticmethod
     def confirmNFCIdentity(part_serial_number: str, part_uuid_p: str, nfc_uid: str):
-        print("je suisd ans le part service .")
         try:
             part = (
                 Part.objects
@@ -369,7 +368,7 @@ class PartService:
                     )
                 )
                 tag_key = HKDFService.derive_tag_key(
-                    domain_key, batch_key, str(identity.tag_id), key_version=identity.key_version
+                    domain_key, batch_key, str(identity.nfc_uid), key_version=identity.key_version
                 )
             else: 
                 tag_key = bytes(16)
@@ -383,7 +382,6 @@ class PartService:
                 )
             except ValueError:
                 return False
-
             if result["read_ctr"] <= identity.last_seen_counter:
                 return False  # rejeu détecté
 
