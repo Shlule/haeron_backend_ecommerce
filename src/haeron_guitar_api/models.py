@@ -130,45 +130,60 @@ class Part(AuditMixin):
     )
 
 
-class PartSecurityMark(models.Model):
-    uuid = models.UUIDField(
-        primary_key=True,
-        default=uuid.uuid4,
-        editable=False
-    )
+class PartEngravingMark(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    part = models.ForeignKey("Part", related_name="security_marks", on_delete=models.CASCADE)
+    mark_type = models.CharField(max_length=50, choices=[
+        ("laser_engraving", "Laser engraving"),
+        ("qr_code", "QR Code"),
+    ])
+    value = models.CharField(max_length=255)
+    location = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
 
-    part = models.ForeignKey(
-        "Part",
-        related_name="security_marks",
-        on_delete=models.CASCADE
-    )
-
-    mark_type = models.CharField(
-        max_length=50,
+    status = models.CharField(
+        max_length=20,
         choices=[
-            ("laser_engraving", "Laser engraving"),
-            ("qr_code", "QR Code"),
+            ("pending", "Pending"),      # réservé par un fetch, pas encore confirmé
+            ("confirmed", "Confirmed"),  # gravure réussie et confirmée par l'agent
+            ("failed", "Failed"),        # échec signalé -> redevient éligible
+        ],
+        default="pending",
+    )
+    engraving_batch = models.ForeignKey(
+        "EngravingBatch", null=True, blank=True, on_delete=models.SET_NULL, related_name="marks"
+    )
+    requested_at = models.DateTimeField(auto_now_add=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    template = models.ForeignKey("EngravingTemplate", on_delete=models.PROTECT, related_name="marks")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["part", "mark_type", "location"],
+                condition=models.Q(status__in=["pending", "confirmed"]),
+                name="uniq_active_mark_per_part_location",
+            )
         ]
-    )
 
-    value = models.CharField(
-        max_length=255,
-        help_text="The visible identifier"
-    )
 
-    location = models.CharField(
-        max_length=255,
-        help_text="Physical location of the mark"
-    )
+class EngravingBatch(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
 
-    description = models.TextField(
-        blank=True,
-        help_text="Additional information about the mark"
-    )
 
-    created_at = models.DateTimeField(
-        auto_now_add=True
-    )
+class EngravingTemplate(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, unique=True)
+    mark_type = models.CharField(max_length=50, choices=PartEngravingMark._meta.get_field("mark_type").choices)
+    part_model = models.ForeignKey("PartModel", null=True, blank=True, on_delete=models.SET_NULL)
+    location = models.CharField(max_length=255)
+    lightburn_project_path = models.CharField(max_length=255)  # chemin du .lbrn2 côté machine de gravure
+    variable_columns = models.JSONField(default=list)  # ex: ["serial_number", "qr_payload"]
 
 class PartBatch(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

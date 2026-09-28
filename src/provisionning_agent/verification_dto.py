@@ -63,7 +63,7 @@ class SecurityMarkDTO:
     uuid: str
     mark_type: str
     value: str
-    location: str
+    location: Optional[str]
     description: Optional[str]
 
 @dataclass(slots=True)

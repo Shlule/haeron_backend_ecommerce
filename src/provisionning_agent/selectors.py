@@ -116,6 +116,9 @@ def build_part_identity(part):
                 description=mark.description,
             )
             for mark in part.security_marks.all()
+            # seules les gravures réellement faites sont exposées au client
+            # (filtre en Python pour conserver le prefetch, sans requête en plus)
+            if mark.status == "confirmed"
         ],
 
         history=[

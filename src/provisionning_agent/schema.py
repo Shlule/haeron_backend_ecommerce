@@ -6,7 +6,7 @@ from datetime import timedelta
 import strawberry
 from strawberry.types import Info
 
-from .models import ProvisionningAgent, AgentEnrollmentToken
+from .models import ProvisionningAgent, AgentEnrollmentToken, AgentType
 
 from authUser.permission.permission import HasRole, IsAuthenticated
 
@@ -20,7 +20,13 @@ class CreateAgentResult:
 @strawberry.type
 class AgentMutation:
     @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin")])
-    def create_provisioning_agent(self, info: Info, name: str) -> CreateAgentResult:
+    def create_provisioning_agent(self, info: Info, name: str, agent_type: str) -> CreateAgentResult:
+
+        valid_types = {choice.value for choice in AgentType}
+        if agent_type not in valid_types:
+            raise ValueError(f"agent_type invalide : {agent_type!r}. Valeurs possibles : {sorted(valid_types)}")
+ 
+
         agent = ProvisionningAgent.objects.create(
             name=name,
             created_by=info.context["request"].user,
