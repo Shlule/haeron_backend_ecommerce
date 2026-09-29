@@ -43,6 +43,17 @@ class SeriesGQLType:
     code: str
     name: str
 
+@strawberry_django.type(models.EngravingTemplate)
+class EngravingTemplateGQLType:
+    uuid: ID
+    name: str
+    mark_type: str
+    location: str
+    lightburn_project_path: str
+    variable_columns: list[str]
+    part_model: Optional["PartModelGQLType"]
+ 
+
 
 @strawberry_django.type(models.Factory)
 class FactoryGQLType:

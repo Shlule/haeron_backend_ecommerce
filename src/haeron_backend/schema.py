@@ -50,6 +50,7 @@ class Query(UserQuery,
             PartHistoryQuery,
             PartQuery,
             SerialCounterQuery,
+            EngravingTemplateQuery,
             ):
     pass
 
@@ -67,7 +68,7 @@ class Mutation(UserMutation,
                 PartModelOptionMutation,
                 SerialCounterMutation,
                 AgentMutation,
-                EngravingMutation,
+                EngravingTemplateMutation,
                 ):
     pass
 

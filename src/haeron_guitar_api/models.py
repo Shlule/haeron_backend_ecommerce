@@ -134,8 +134,8 @@ class PartEngravingMark(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     part = models.ForeignKey("Part", related_name="security_marks", on_delete=models.CASCADE)
     mark_type = models.CharField(max_length=50, choices=[
-        ("laser_engraving", "Laser engraving"),
-        ("qr_code", "QR Code"),
+        ("security", "security"),
+        ("serial_number", "serial_number"),
     ])
     value = models.CharField(max_length=255)
     location = models.CharField(max_length=255)
