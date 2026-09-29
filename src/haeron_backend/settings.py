@@ -68,7 +68,6 @@ INSTALLED_APPS = [
     "allauth.account",
     "allauth.mfa",
     "django_filters",
-    "engraving_agent",
 ]
 
 
