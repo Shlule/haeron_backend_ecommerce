@@ -7,22 +7,23 @@ from ..types.types import PartHistoryGQLType
 from .part_history_input import CreatePartHistoryInput, UpdatePartHistoryInput
 from .part_history_dto import CreatePartHistoryDTO, UpdatePartHistoryDTO
 from .part_history_service import PartHistoryService
+from authUser.permission.permission import HasRole, IsAuthenticated
 
 
 @strawberry.type
 class PartHistoryQuery:
-    @strawberry.field
+    @strawberry.field(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager","rnd","supplier")])
     def get_part_history(self, uuid: UUID) -> PartHistoryGQLType:
         return PartHistory.objects.get(uuid)
 
-    @strawberry.field
+    @strawberry.field(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager","rnd","supplier")])
     def get_all_history(self) -> List[PartHistoryGQLType]:
         return PartHistory.objects.all()
 
 
 @strawberry.type
 class PartHistoryMutation:
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager","rnd","supplier")])
     def create_part_history(self, input: CreatePartHistoryInput) -> PartHistoryGQLType:
         dto = CreatePartHistoryDTO(
             title=input.title,
@@ -32,7 +33,7 @@ class PartHistoryMutation:
         )
         return PartHistoryService.create(dto)
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin","supplier")])
     def update_part_history(self, uuid: UUID, input: UpdatePartHistoryInput) -> PartHistoryGQLType:
         part_history = PartHistory.objects.get(uuid)
         dto = UpdatePartHistoryDTO(

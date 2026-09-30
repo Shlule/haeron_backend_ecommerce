@@ -10,11 +10,12 @@ from .option_filter import OptionFilterSet
 
 
 from ..types.types import OptionGQLType
+from authUser.permission.permission import HasRole, IsAuthenticated
 
 
 @strawberry.type
 class OptionQuery:
-    @strawberry.field
+    @strawberry.field(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager","rnd")])
     def options(self, filters: Optional[OptionFilterInput] = None) -> OptionGQLType:
         qs = Option.objects.all()
         if filters:
@@ -25,7 +26,7 @@ class OptionQuery:
 
 @strawberry.type
 class OptionMutation:
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "rnd")])
     def create_option(self, input: CreateOptionInput) -> OptionGQLType:
         dto = CreateOptionDTO(
             input.name,
@@ -35,7 +36,7 @@ class OptionMutation:
         return option
 
     # TODO - make some mutation to delete with name  or code  because they're unique see models
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "rnd")])
     def delete_options(self, option_ids: List[UUID]) -> bool:
         return OptionService.delete(option_ids)
 

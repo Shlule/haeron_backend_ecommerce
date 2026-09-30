@@ -9,20 +9,21 @@ from .instrumentType_input import CreateInstrumentTypeInput, InstrumentTypeFilte
 from .instrumentType_filter import InstrumentTypeFilterSet
 from .instrumentType_service import InstrumentTypeService
 from ..types.types import InstrumentTypeGQLType
+from authUser.permission.permission import HasRole, IsAuthenticated
 
 
 @strawberry.type
 class InstrumentTypeQuery:
-    @strawberry.field
+    @strawberry.field(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager")])
     def get_instrument_type(self, uuid: UUID) -> InstrumentTypeGQLType:
         instrument_type = InstrumentType.objects.get(pk=uuid)
         return instrument_type
 
-    @strawberry.field
+    @strawberry.field(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager")])
     def get_all_instrument_type(self) -> List[InstrumentTypeGQLType]:
         return InstrumentType.objects.all()
 
-    @strawberry.field
+    @strawberry.field(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager")])
     def instrument_types(self, filters: Optional[InstrumentTypeFilterInput] = None) -> List[InstrumentTypeGQLType]:
         qs = InstrumentType.objects.all()
         if filters:
@@ -33,7 +34,7 @@ class InstrumentTypeQuery:
 
 @strawberry.type
 class InstrumentTypeMutation:
-    @strawberry.mutation()
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "rnd")])
     def create_instrument_type(self, input: CreateInstrumentTypeInput) -> InstrumentTypeGQLType:
         dto = CreateInstrumentTypeDTO(name=input.name, code=input.code, part_types=input.part_types or [])
         instrument_type = InstrumentTypeService.create(dto)
@@ -43,18 +44,18 @@ class InstrumentTypeMutation:
 
         return instrument_type
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "rnd")])
     def add_instrument_type_part_type_connec(instrument_type_id: UUID, part_types_ids: List[UUID]) -> bool:
         result = InstrumentTypeService.add_parts_types(instrument_type_id, part_types_ids)
         return result
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "rnd")])
     def rm_instrument_type_part_type_connec(instrument_type_id: UUID, part_types_ids: List[UUID]) -> bool:
         result = InstrumentTypeService.remove_parts_types(instrument_type_id, part_types_ids)
         return result
 
     # TODO - make some mutation to delete with name  or code  because they're unique see models
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin", "admin","rnd")])
     def delete_instrument_type(self, uuid: strawberry.ID) -> bool:
         """
         Supprime un InstrumentType. Retourne True si la suppression a réussi, False sinon.

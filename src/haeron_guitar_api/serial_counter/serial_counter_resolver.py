@@ -7,19 +7,19 @@ from .serial_counter_filter import SerialCounterFilterSet
 
 from ..models import SerialCounter
 from ..types.types import SerialCounterGQLType
-
+from authUser.permission.permission import HasRole, IsAuthenticated
 
 @strawberry.type
 class SerialCounterQuery:
-    @strawberry.field
+    @strawberry.field(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager","rnd")])
     def get_serial_counter_by_id(self, uuid: UUID) -> SerialCounterGQLType:
         return SerialCounter.objects.get(uuid)
 
-    @strawberry.field
+    @strawberry.field(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager","rnd")])
     def get_all_serial_counter() -> SerialCounterGQLType:
         return SerialCounter.objects.all()
 
-    @strawberry.field
+    @strawberry.field(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager","rnd")])
     def serial_counters(self, filters: Optional[SerialCounterFilterInput] = None) -> list[SerialCounterGQLType]:
 
         qs = SerialCounter.objects.all()
@@ -35,15 +35,15 @@ class SerialCounterQuery:
 
 @strawberry.type
 class SerialCounterMutation:
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager","rnd")])
     def get_or_create_today_serial(self, factory_id: str) -> SerialCounterGQLType:
         return SerialCounterService.get_or_create_today(factory_id=factory_id)
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager","rnd")])
     def serial_counter_next(self, factory_id: str) -> int:
         return SerialCounterService.next(factory_id=factory_id)
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager","rnd")])
     def delete_serials(self, serial_ids: List[UUID]) -> int:
         delete_count = SerialCounterService.delete(serial_ids)
         return delete_count

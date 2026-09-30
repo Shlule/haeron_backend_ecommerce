@@ -14,11 +14,12 @@ from .part_model_option_input import (
 )
 from .part_model_option_service import PartModelOptionService
 from .part_model_option_filter import PartModelOptionFIlterSet
+from authUser.permission.permission import HasRole, IsAuthenticated
 
 
 @strawberry.type
 class PartModelOptionQuery:
-    @strawberry.field
+    @strawberry.field(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager", "rnd")])
     def partModelOptions(self, filters: PartModelOptionInputFilter) -> PartModelOptionGQLType:
         qs = PartModelOption.objects.all()
         if filters:
@@ -26,14 +27,14 @@ class PartModelOptionQuery:
             qs = PartModelOptionFIlterSet(filter_dict, queryset=qs).qs
         return qs
 
-    @strawberry.field
+    @strawberry.field(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager", "rnd")])
     def get_all_part_model_options(self) -> List[PartModelOptionGQLType]:
         return PartModelOption.objects.all()
 
 
 @strawberry.type
 class PartModelOptionMutation:
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "rnd")])
     def create_part_model_option(self, input: CreatePartModelOptionInput) -> PartModelOptionGQLType:
         dto = CreatePartModelOptionDTO(
             name=input.name,
@@ -45,12 +46,12 @@ class PartModelOptionMutation:
         part_model_option = PartModelOptionService.create(dto)
         return part_model_option
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "rnd")])
     def update_price(self, input: UpdatePartModelOptionPriceInput) -> PartModelOptionGQLType:
         dto = UpdatePartModelOptionPriceDTO(uuid=input.uuid, price_delta=input.price_delta)
         return PartModelOptionService.update_price(dto)
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "rnd")])
     def delete_part_model_options(self, part_model_options_ids: List[UUID]) -> bool:
         delete_count, _ = PartModelOption.objects.filter(pk__in=part_model_options_ids).delete()
         return delete_count

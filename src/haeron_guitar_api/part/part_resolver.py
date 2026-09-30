@@ -7,22 +7,22 @@ from ..types.types import PartGQLType
 from .part_input import CreatePartInput, UpdatePartInput
 from .part_dto import CreatePartDTO, UpdatePartDTO
 from .part_service import PartService
-
+from authUser.permission.permission import HasRole, IsAuthenticated
 
 @strawberry.type
 class PartQuery:
-    @strawberry.field
+    @strawberry.field(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager","rnd","supplier")])
     def get_part(self, uuid: UUID) -> PartGQLType:
         return Part.objects.get(uuid)
 
-    @strawberry.field
+    @strawberry.field(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager","rnd","supplier")])
     def get_all_part(self) -> List[PartGQLType]:
         return Part.objects.all()
 
 
 @strawberry.type
 class PartMutation:
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager")])
     def create_part(self, input: CreatePartInput) -> PartGQLType:
         dto = CreatePartDTO(
             factory_id=input.factory_id,
@@ -34,7 +34,7 @@ class PartMutation:
         )
         return PartService.create(dto)
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager")])
     def update_part(self, uuid: UUID, input: UpdatePartInput) -> PartGQLType:
         part = Part.objects.get(uuid=uuid)
         dto = UpdatePartDTO(
@@ -45,7 +45,8 @@ class PartMutation:
         )
 
         return PartService.update(part, dto)
-
+    
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin")])
     def delete_part(delf, uuid: UUID) -> bool:
         Part.objects.get(pk=uuid).delete()
 
