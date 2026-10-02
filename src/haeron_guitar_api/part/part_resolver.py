@@ -47,7 +47,7 @@ class PartMutation:
         return PartService.update(part, dto)
     
     @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin")])
-    def delete_part(delf, uuid: UUID) -> bool:
+    def delete_part(self, uuid: UUID) -> bool:
         Part.objects.get(pk=uuid).delete()
 
 
