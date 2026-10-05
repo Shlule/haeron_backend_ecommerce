@@ -80,15 +80,25 @@ class ProvisionIdentityView(APIView):
     permission_classes = [agent_type_permission(AgentType.NFC_PROVISIONING)]
 
     def post(self, request):
+        print("je suis dans le provisionning")
         agent: ProvisionningAgent = request.user
         serial_number = request.data["serial_number"]
         part = request.data["part_uuid"]
         nfc_uid = request.data["nfc_uid"]
         initial_counter = request.data["initial_counter"]
 
+        print("jesuis le donne de depart")
+        print(serial_number)
+        print(part)
+        print(nfc_uid)
+        print(initial_counter)
+        print("je vais check si il est deja provisionner ")
         already_provisioned = PartNFCIdentity.objects.filter(part=part).exists()
 
+
+        print("je print si iol est provisionner")
         result = PartService.provideNFCIdentity(serial_number, part, nfc_uid_p=nfc_uid, initial_counter=initial_counter)
+        print("je creer l'identity")
         tag_key = result.get("tag_key", None)
         old_tag_key = result.get("old_tag_key", None)
         version = result.get("version", None)
@@ -246,12 +256,16 @@ class VerifyPart(APIView):
     permission_classes = []
 
     def post(self, request):
+        print("je verify la part")
         serial_number = request.data.get("serial_number")
         cmac = request.data.get("cmac")
         nfc_uid = request.data.get("nfc_uid")
         tag_counter = request.data.get("tag_counter")
 
+        print("je vais get la part")
         part = get_part_for_verification(serial_number)
+        print("@"*50)
+        print(part)
         if part is None:
             return Response({"status": "failed", "detail": "Part not found."}, status=status.HTTP_404_NOT_FOUND)
 

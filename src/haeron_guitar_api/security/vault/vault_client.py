@@ -47,15 +47,10 @@ class VaultClient:
         return self.client.is_authenticated()
 
     def read_secret(self, path: str) -> dict[str, Any]:
-        print("je suis dans le readsecret")
         try:
-            print("jai trouver le path")
-            print(path)
             response = self.client.secrets.kv.v2.read_secret_version(path=path, mount_point=self.mount_point)
             return response.get("data", {}).get("data", {})
         except hvac.exceptions.InvalidPath:
-            print("je n'ai pas trouver le path")
-            print(path)
             raise VaultSecretNotFound(path)
 
     def generate_key(self):

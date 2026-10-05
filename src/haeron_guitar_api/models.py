@@ -219,7 +219,7 @@ class PartNFCIdentity(models.Model):
         choices=[("active", "Active"),("pending", "Pending"), ("revoked", "Revoked"), ("rotated", "Rotated"), ("error", "error")],
         default="pending",
     )
-    last_seen_counter = models.PositiveBigIntegerField(null=True, blank=True)
+    last_seen_counter = models.PositiveBigIntegerField(default=0)
     last_verified_at = models.DateTimeField(null= True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
