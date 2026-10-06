@@ -1,5 +1,3 @@
-import pprint
-
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.db import transaction
@@ -114,12 +112,6 @@ class PartService:
     # FIXME remove test_run Later. 
     @staticmethod
     def provideNFCIdentity(part_serial_number, part_uuid_p: str, nfc_uid_p=None, initial_counter=None, test_run=False):
-        print("je provide nfc ")
-        print(part_serial_number)
-        print(part_uuid_p)
-        print(nfc_uid_p)
-        print(initial_counter)
-
         part = (
             Part.objects
             .select_related("batch", "part_model")
@@ -156,7 +148,6 @@ class PartService:
         part_batch_id = part.batch.uuid
 
         if not test_run:
-            print("la version n'est pas superieur a 1")
             vault_service = get_vault_service()
             tag_key = HKDFService.derive_tag_key(
                 vault_service.get_secret(
@@ -168,12 +159,9 @@ class PartService:
                 nfc_uid_p,
                 new_version,
             )
-            print("voici la key")
-            print(tag_key)
             
             # get the old key for changing it in provisionning agent
             if new_version > 1:
-                print("la version est supperieur a 1")
                 old_version = new_version -1
                 old_tag_key = HKDFService.derive_tag_key(
                 vault_service.get_secret(
@@ -187,11 +175,9 @@ class PartService:
             )
             else: 
                 if not last_revoked_identity:
-                    print("le old es bytes0")
                     old_tag_key = bytes(16)
                 # the old key if we change the tag uid. 
                 else: 
-                    print("il y avait un last_revoke precedement")
                     old_tag_key = HKDFService.derive_tag_key(
                     vault_service.get_secret(
                         vault_service.get_vault_path("domain", part_model_id=part_model_id),
@@ -202,20 +188,12 @@ class PartService:
                     last_revoked_identity.nfc_uid,
                     last_revoked_identity.key_version,
                 )
-            print("$"*50)
-            print(tag_key)
-            print(old_tag_key)
-            print(initial_counter)
 
         else: 
             tag_key = bytes(16)
             old_tag_key = bytes(16)
 
-        print("je suis ")
-        print(nfc_uid_p)
-        print(new_version)
         PartNFCIdentity.objects.create(part=part, batch=part.batch, nfc_uid=nfc_uid_p, last_seen_counter=initial_counter, key_version=new_version)
-        print("j'ai reussi a creer un partnfc")
 
         return {"tag_key":tag_key,"old_tag_key": old_tag_key, "version": new_version}
 
@@ -366,6 +344,9 @@ class PartService:
 
 # FIXME - remove le test_run 
     def verify_part_authenticity(serial_number: str, nfc_uid_hex: str, ctr_hex: str, cmac_hex: str, test_run=False) -> bool:
+        nfc_uid_hex = nfc_uid_hex.strip().lower()
+        ctr_hex = ctr_hex.strip()
+        cmac_hex = cmac_hex.strip()
         with transaction.atomic():
             try:
                 identity = (
@@ -403,11 +384,7 @@ class PartService:
                     tag_key,
                 )
             except ValueError:
-                print("je suis dans l'exepction de validate")
                 return False
-            print("!"*50)
-            print(result["read_ctr"])
-            print(identity.last_seen_counter)
             if result["read_ctr"] <= identity.last_seen_counter:
                 return False  # rejeu détecté
 

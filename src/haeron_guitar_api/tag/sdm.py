@@ -1,5 +1,3 @@
-from pprint import pprint
-
 from cryptography.hazmat.primitives import cmac
 from cryptography.hazmat.primitives.ciphers import algorithms
 import struct
@@ -42,15 +40,8 @@ def validate_plain_sun(uid: bytes, read_ctr: bytes, sdmmac: bytes, sdm_file_read
 
     data = uid + bytes(read_ctr_ba)
     proper_sdmmac = calculate_sdmmac(sdm_file_read_key, data)
-    print("je usi un trp[ ]")
-    print("="*50)
-    print(proper_sdmmac)
-    print(sdmmac)
     if sdmmac != proper_sdmmac:
         raise InvalidMessage("CMAC invalide")
 
     read_ctr_num = struct.unpack(">I", b"\x00" + read_ctr)[0]
-    print("$"*50)
-    print(type(read_ctr_num))
-    print(read_ctr_num)
     return {"uid": uid, "read_ctr": read_ctr_num}
