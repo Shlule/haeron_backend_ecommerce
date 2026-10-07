@@ -1,10 +1,13 @@
 import logging
 import secrets
+import threading
+import time
 from typing import Any
 
 import hvac
-from django.conf import settings
 import hvac.exceptions
+import requests
+from django.conf import settings
 
 from .vault_execptions import (
     VaultSecretNotFound,
@@ -18,13 +21,52 @@ from .vault_execptions import (
 
 logger = logging.getLogger(__name__)
 
+SA_TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+RENEW_MARGIN_SECONDS = 60
+
 
 class VaultClient:
     def __init__(self):
-        self.client = hvac.Client(url=settings.VAULT_ADDR, token=settings.VAULT_TOKEN, timeout=settings.VAULT_TIMEOUT)
-
+        self._client = hvac.Client(url=settings.VAULT_ADDR, timeout=settings.VAULT_TIMEOUT)
         self.mount_point = getattr(settings, "VAULT_MOUNT_POINT", "secret")
+        self._lock = threading.Lock()
+        self._expires_at = 0.0  # horloge monotonic
+        self._login()
         self._check_connection()
+
+    @property
+    def client(self) -> hvac.Client:
+        """Client hvac, reconnecté automatiquement quand le token approche de l'expiration."""
+        if time.monotonic() >= self._expires_at - RENEW_MARGIN_SECONDS:
+            with self._lock:
+                if time.monotonic() >= self._expires_at - RENEW_MARGIN_SECONDS:
+                    self._login()
+        return self._client
+
+    def _login(self):
+        # Mode développement : token statique fourni explicitement
+        static_token = getattr(settings, "VAULT_TOKEN", None)
+        if static_token:
+            self._client.token = static_token
+            self._expires_at = float("inf")
+            return
+
+        # Mode Kubernetes : authentification par ServiceAccount
+        role = getattr(settings, "VAULT_K8S_ROLE", "haeron-backend")
+        try:
+            with open(SA_TOKEN_PATH) as f:
+                jwt = f.read().strip()
+            resp = self._client.auth.kubernetes.login(role=role, jwt=jwt)
+        except FileNotFoundError as e:
+            raise VaultAuthenticationError(f"Token ServiceAccount introuvable : {SA_TOKEN_PATH}") from e
+        except requests.exceptions.RequestException as e:
+            raise VaultConnectionError(f"Login Vault impossible : {type(e).__name__}: {e}") from e
+        except hvac.exceptions.VaultError as e:
+            raise VaultAuthenticationError(f"Login Kubernetes refusé (rôle {role}) : {e}") from e
+
+        lease = resp["auth"]["lease_duration"]
+        self._expires_at = time.monotonic() + lease
+        logger.info("Vault: login Kubernetes OK (rôle %s, durée %ss)", role, lease)
 
     def _check_connection(self):
         try:
