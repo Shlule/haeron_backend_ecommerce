@@ -6,6 +6,7 @@ pour le NFC.
 from collections import defaultdict
 
 from django.db import transaction
+from django.db.models import Exists, F, OuterRef
 from django.utils import timezone
 
 from haeron_guitar_api.models import EngravingTemplate, Part, PartEngravingMark
@@ -34,13 +35,17 @@ class EngravingService:
         if template.part_model_id:
             parts_qs = parts_qs.filter(part_model_id=template.part_model_id)
 
-        parts_qs = parts_qs.exclude(
-            security_marks__mark_type=template.mark_type,
-            security_marks__location=template.location,
-            security_marks__status__in=["pending", "confirmed"],
+        # Exists plutôt que exclude(security_marks__a=..., security_marks__b=...) :
+        # sur une relation multi-valuée, les conditions d'un même exclude() ne
+        # portent pas forcément sur la MÊME marque, ce qui exclut à tort une pièce
+        # ayant par ex. une marque "failed" ici et une "confirmed" ailleurs.
+        active_mark = PartEngravingMark.objects.filter(
+            part=OuterRef("pk"),
+            mark_type=template.mark_type,
+            location=template.location,
+            status__in=["pending", "confirmed"],
         )
-
-        return parts_qs
+        return parts_qs.exclude(Exists(active_mark)).order_by("serial_number")
 
     @classmethod
     @transaction.atomic
@@ -49,17 +54,23 @@ class EngravingService:
         Réserve les pièces à graver et retourne le tout groupé par template
         (un groupe = un CSV LightBurn côté agent).
 
+        `limit` est un plafond GLOBAL (tous templates confondus) sur le nombre
+        de marques renvoyées, marques déjà pending comprises.
+
         Requêtes SQL : 1 (templates) + 1 (toutes les marques déjà pending, tous
         templates confondus) + 1 par template pour trouver les pièces manquantes
         (inévitable : le critère d'exclusion — mark_type/location/part_model —
         diffère par template) + 1 bulk_create global pour toutes les nouvelles
         marques, tous templates confondus.
-        Soit 3 + N_templates requêtes, contre 1 + 3×N_templates avant.
         """
-        templates_qs = EngravingTemplate.objects.all()
+        # templates spécifiques à un modèle de pièce d'abord : si un template
+        # "tous modèles" vise le même emplacement, c'est le spécifique qui gagne
+        templates_qs = EngravingTemplate.objects.order_by(F("part_model").asc(nulls_last=True), "name")
         if mark_type:
             templates_qs = templates_qs.filter(mark_type=mark_type)
-        templates = list(templates_qs)  # 1 requête
+        # verrou sur les templates : deux fetch simultanés (deux postes) sont
+        # sérialisés au lieu de se disputer les mêmes pièces
+        templates = list(templates_qs.select_for_update())  # 1 requête
 
         if not templates:
             return {}
@@ -67,34 +78,42 @@ class EngravingService:
         # 1 seule requête pour récupérer les marques pending de TOUS les templates
         existing_pending_qs = PartEngravingMark.objects.filter(
             template__in=templates, status="pending",
-        ).select_related("part", "template")
+        ).select_related("part", "template").order_by("part__serial_number")
         if part_model_uuid:
             existing_pending_qs = existing_pending_qs.filter(part__part_model_id=part_model_uuid)
 
         existing_by_template_pk = defaultdict(list)
+        # (part, mark_type, location) déjà occupés : miroir en mémoire de la
+        # contrainte uniq_active_mark_per_part_location, pour que deux templates
+        # qui se recouvrent (ex. "tous modèles" + un modèle précis, même
+        # emplacement) ne créent pas deux marques pour la même pièce dans ce
+        # fetch -> sinon IntegrityError au bulk_create et fetch en 500.
+        taken = set()
         for mark in existing_pending_qs:  # évalue la requête ici, une seule fois
             existing_by_template_pk[mark.template_id].append(mark)
+            taken.add((mark.part_id, mark.mark_type, mark.location))
 
         grouped = defaultdict(list)
         all_new_marks = []
+        remaining = limit - len(taken) if limit else None
 
         for template in templates:
-            existing = existing_by_template_pk.get(template.pk, [])
-            grouped[template].extend(existing)
+            grouped[template].extend(existing_by_template_pk.get(template.pk, []))
 
-            already_reserved_part_ids = {m.part_id for m in existing}
+            if remaining is not None and remaining <= 0:
+                continue
+
             parts_qs = cls.find_parts_missing_mark(template)
             if part_model_uuid:
                 parts_qs = parts_qs.filter(part_model_id=part_model_uuid)
-            parts_qs = parts_qs.exclude(uuid__in=already_reserved_part_ids)
 
-            if limit:
-                remaining = limit - len(existing)
-                if remaining <= 0:
+            for part in parts_qs.iterator():  # 1 requête par template, critère d'exclusion propre au template
+                key = (part.pk, template.mark_type, template.location)
+                if key in taken:
                     continue
-                parts_qs = parts_qs[:remaining]
+                if remaining is not None and remaining <= 0:
+                    break
 
-            for part in parts_qs:  # 1 requête par template, critère d'exclusion propre au template
                 value = cls.compute_mark_value(part, template)
                 mark = PartEngravingMark(
                     part=part,
@@ -104,8 +123,11 @@ class EngravingService:
                     location=template.location,
                     status="pending",
                 )
+                taken.add(key)
                 all_new_marks.append(mark)
                 grouped[template].append(mark)
+                if remaining is not None:
+                    remaining -= 1
 
         if all_new_marks:
             # 1 seule requête d'insertion pour toutes les nouvelles marques,

@@ -172,6 +172,8 @@ class EngravingFetchView(APIView):
             {
                 "template_uuid": str(template.uuid),
                 "template_name": template.name,
+                "mark_type": template.mark_type,
+                "location": template.location,
                 "lightburn_project_path": template.lightburn_project_path,
                 "variable_columns": template.variable_columns,
                 "marks": [
