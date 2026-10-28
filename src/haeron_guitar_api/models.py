@@ -81,6 +81,19 @@ class PartModel(AuditMixin):
     part_type = models.ForeignKey("PartType", on_delete=models.PROTECT)
     series = models.ForeignKey("Series", null=True, blank=True, on_delete=models.SET_NULL)
 
+    # a model no longer made stays in the database for the history of its parts
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ("prototype", "Prototype"),  # in development, not sold, not made in series
+            ("active", "Active"),  # sold and made
+            ("service_only", "Service only"),  # no longer sold, still made to repair or replace a part
+            ("discontinued", "Discontinued"),  # no longer sold nor made
+        ],
+        default="active",
+    )
+    discontinued_at = models.DateTimeField(null=True, blank=True)
+
     def __str__(self):
         return f"{self.name} ({self.part_type.name})"
 
