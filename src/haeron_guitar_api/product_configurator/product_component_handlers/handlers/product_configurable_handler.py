@@ -76,7 +76,7 @@ class ProductConfigurableHandler(BaseComponentHandler):
                             "name": p.name,
                             "price": float(p.price),
                         }
-                        for p in choices_by_component.get(comp.id, [])
+                        for p in choices_by_component.get(comp.uuid, [])
                     ],
                 }
             )

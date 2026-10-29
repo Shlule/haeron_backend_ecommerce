@@ -10,6 +10,13 @@ from .part_model_service import PartModelService
 from authUser.permission.permission import HasRole, IsAuthenticated
 
 
+def _maybe(field):
+    # strawberry.Maybe : UNSET when the field is not sent, Some(value) otherwise
+    if field is None or field is strawberry.UNSET:
+        return None
+    return getattr(field, "value", field)
+
+
 @strawberry.type
 class PartModelQuery:
     @strawberry.field(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "rnd", "production_manager")])
@@ -37,11 +44,13 @@ class PartModelMutation:
     @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "rnd")])
     def update_part_model(self, uuid: UUID, input: UpdatePartModelInput) -> PartModelGQLType:
         dto = UpdatePartModelDTO(
-            name=input.name,
-            part_type_id=input.part_type_id,
-            series_id=input.series_id,
-            price=input.price,
-            code=input.code,
+            uuid=uuid,
+            name=_maybe(input.name),
+            part_type_id=_maybe(input.part_type_id),
+            series_id=_maybe(input.series_id),
+            price=_maybe(input.price),
+            code=_maybe(input.code),
+            status=_maybe(input.status),
         )
         return PartModelService.update(dto)
 

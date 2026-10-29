@@ -105,6 +105,8 @@ class PartModelOption(AuditMixin):
     part_model = models.ForeignKey("PartModel", on_delete=models.CASCADE)
     option = models.ForeignKey("Option", on_delete=models.CASCADE)
     price_delta = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    # a value no longer offered in the configurator stays in the database for the history and the rules
+    is_active = models.BooleanField(default=True)
 
 
 class PartHistory(AuditMixin):

@@ -15,7 +15,10 @@ class CreatePartModelDTO:
 
 @dataclass
 class UpdatePartModelDTO:
+    uuid: UUID
     name: Optional[str | None] = None
     part_type_id: Optional[UUID | None] = None
     price: Optional[Decimal | None] = None
     code: Optional[str | None] = None
+    series_id: Optional[UUID | None] = None
+    status: Optional[str | None] = None

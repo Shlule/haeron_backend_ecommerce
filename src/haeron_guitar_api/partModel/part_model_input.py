@@ -21,3 +21,4 @@ class UpdatePartModelInput:
     code: strawberry.Maybe[str] = strawberry.UNSET
     price: strawberry.Maybe[Decimal] = strawberry.UNSET
     series_id: strawberry.Maybe[UUID] = strawberry.UNSET
+    status: strawberry.Maybe[str] = strawberry.UNSET

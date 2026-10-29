@@ -7,10 +7,10 @@ from uuid import UUID
 @strawberry.input
 class CreatePartModelOptionInput:
     name: str
-    code: Optional[UUID]
+    code: str
     part_model: UUID
     option: UUID
-    price_delta: float
+    price_delta: Optional[Decimal] = None
 
 
 @strawberry.input
@@ -29,3 +29,9 @@ class PartModelOptionInputFilter:
 class UpdatePartModelOptionPriceInput:
     uuid: UUID
     price_delta: Optional[Decimal] = None
+
+
+@strawberry.input
+class UpdatePartModelOptionActiveInput:
+    uuid: UUID
+    is_active: bool

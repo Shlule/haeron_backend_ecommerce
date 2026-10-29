@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     "django_extensions",
     "corsheaders",
     "rest_framework_simplejwt",
+    "rest_framework",
     "authUser",
     "provisionning_agent",
     "haeron_guitar_api.apps.HaeronGuitarApiConfig",

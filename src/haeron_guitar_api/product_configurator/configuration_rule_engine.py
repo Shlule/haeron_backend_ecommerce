@@ -1,4 +1,3 @@
-from calendar import c
 from dataclasses import asdict
 from pprint import pprint
 from ..models import (
@@ -111,11 +110,12 @@ class RuleEngine:
                 "label": value.part_model_option.name,
             }
 
-        if value.product:
+        if value.product_component_choice:
+            product = value.product_component_choice.product
             return {
                 "type": "product",
-                "id": str(value.product.uuid),
-                "label": value.product.name,
+                "id": str(product.uuid),
+                "label": product.name,
             }
 
         return None
@@ -134,19 +134,30 @@ class RuleEngine:
 
         return violations
 
+    @staticmethod
+    def value_key(component, option=None):
+        # key used in the normalized configuration : "<component_key>.<option_name>"
+        # if the option is empty the value is the product selected for the component (product_choice)
+        component_key = component.key if hasattr(component, "key") else component
+        option_name = option.name if hasattr(option, "name") else option
+        return f"{component_key}.{option_name}" if option_name else component_key
+
     def _rule_applies(self, rule: RuleDTO, config: dict) -> bool:
 
         for condition in rule.conditions:
-            component_key = condition.component.key if hasattr(condition.component, "key") else condition.component
-
-            value = config.get(component_key)
+            value = config.get(self.value_key(condition.component, condition.option))
 
             if value is None:
                 return False
 
-            allowed_values = {v["id"] for v in condition.values}
+            compare_values = {v["id"] for v in condition.values if v}
+            operator = getattr(condition, "operator", "eq") or "eq"
 
-            if str(value) not in allowed_values:
+            if operator == "neq":
+                if str(value) in compare_values:
+                    return False
+            elif str(value) not in compare_values:
+                # "eq" and "in" share the same behaviour : the value must be in the list
                 return False
 
         return True
@@ -155,19 +166,44 @@ class RuleEngine:
         violations = []
 
         for result in rule.results:
-            component_key = result.component.key if hasattr(result.component, "key") else result.component
+            key = self.value_key(result.component, result.option)
 
-            selected_value = config.get(component_key)
+            selected_value = config.get(key)
 
-            allowed = {v["id"] for v in result.target_values}
+            allowed = {v["id"] for v in result.target_values if v}
 
             if selected_value and str(selected_value) not in allowed:
                 violations.append(
                     {
                         "rule_id": str(rule.id),
-                        "component": component_key,
+                        "rule_name": rule.name,
+                        "component": key,
                         "message": "invalid configuration according to rule",
                     }
                 )
 
         return violations
+
+    # plain JSON version of the rules for the front end (so the front can apply them in autonomy)
+    def serialize_rule_json(self, rule: ConfigurationRule):
+        return {
+            "id": str(rule.uuid),
+            "name": rule.name,
+            "conditions": [
+                {
+                    "component": c.source_component.key,
+                    "option": c.source_option.name,
+                    "operator": c.operator,
+                    "values": [v for v in (self.serialize_value(v) for v in c.compare_values.all()) if v],
+                }
+                for c in rule.conditions.all()
+            ],
+            "results": [
+                {
+                    "component": r.target_component.key,
+                    "option": r.target_option.name,
+                    "values": [v for v in (self.serialize_value(v) for v in r.target_values.all()) if v],
+                }
+                for r in rule.results.all()
+            ],
+        }

@@ -7,7 +7,6 @@ from ..models import CartItem, Product
 from haeron_guitar_api.cart.cart_dto import CreateCartDTO
 from haeron_guitar_api.product_configurator.configuration_normalizer import ConfigurationNormalizer
 from haeron_guitar_api.product_configurator.configuration_rule_engine import RuleEngine
-from haeron_guitar_api.product_configurator.rule_engine_dto import toRuleDto
 import hashlib
 import json
 
@@ -65,7 +64,7 @@ class CartItemService:
 
         engine = RuleEngine()
         rules_snapshot = engine.collect_rules(product)
-        rules_snapshot = toRuleDto(rules_snapshot["rules"])
+        rules_snapshot = [engine.serialize_rule(rule) for rule in rules_snapshot["rules"]]
         if rules_snapshot:
             rule_checking_data = ConfigurationNormalizer.normalize(snapshot=snapshot)
             rules_violation = engine.check(configuration=rule_checking_data, rules=rules_snapshot)

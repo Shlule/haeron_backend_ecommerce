@@ -1,6 +1,7 @@
 from collections import Counter
 from decimal import Decimal
 from pprint import pprint
+from django.db.models import Prefetch
 from django.forms import ValidationError
 from ....models import PartModel, PartModelOption, ComponentCompatibility
 from ..handlers.base_component_handler import BaseComponentHandler
@@ -25,8 +26,9 @@ class CustomPieceHandler(BaseComponentHandler):
         part_model_option_ids = config.get("part_model_option_ids", [])
 
         part_model = PartModel.objects.get(pk=part_model_id)
+        # a value switched off in the back-office can no longer be ordered
         part_model_options = PartModelOption.objects.select_related("option").filter(
-            pk__in=part_model_option_ids, part_model=part_model
+            pk__in=part_model_option_ids, part_model=part_model, is_active=True
         )
 
         options = [part_model_option.option.name for part_model_option in part_model_options]
@@ -49,7 +51,7 @@ class CustomPieceHandler(BaseComponentHandler):
 
         part_model_options_ids = config.get("part_model_option_ids", [])
         selected_part_model_options = PartModelOption.objects.filter(
-            part_model=part_model, pk__in=part_model_options_ids
+            part_model=part_model, pk__in=part_model_options_ids, is_active=True
         )
 
         if len(part_model_options_ids) != selected_part_model_options.count():
@@ -88,7 +90,7 @@ class CustomPieceHandler(BaseComponentHandler):
 
         part_model_ids = compatibilities.values_list("part_model_id", flat=True)
 
-        options = PartModelOption.objects.filter(part_model_id__in=part_model_ids).select_related("option")
+        options = PartModelOption.objects.filter(part_model_id__in=part_model_ids, is_active=True).select_related("option")
 
         # group options by part_model_id
         options_by_part_model = {}
@@ -139,7 +141,7 @@ class CustomPieceHandler(BaseComponentHandler):
         part_models = PartModel.objects.filter(
             componentcompatibility__component=component,
             componentcompatibility__instrument_model=product.instrument_model,
-        ).prefetch_related("partmodeloption_set")
+        ).prefetch_related(Prefetch("partmodeloption_set", queryset=PartModelOption.objects.filter(is_active=True)))
 
         return CustomPieceComponent(key=component.key, part_models=part_models)
 

@@ -13,6 +13,8 @@ from haeron_guitar_api.part_history.part_history_resolver import PartHistoryQuer
 from haeron_guitar_api.part.part_resolver import PartMutation, PartQuery
 from haeron_guitar_api.serial_counter.serial_counter_resolver import SerialCounterQuery,SerialCounterMutation
 from haeron_guitar_api.engraving_template.engraving_template_resolver import EngravingTemplateMutation, EngravingTemplateQuery
+from haeron_guitar_api.product_configurator.configurator_resolver import ConfiguratorQuery
+from haeron_guitar_api.backoffice.schema import BackofficeMutation, BackofficeQuery
 
 from provisionning_agent.schema import AgentMutation
 
@@ -51,6 +53,8 @@ class Query(UserQuery,
             PartQuery,
             SerialCounterQuery,
             EngravingTemplateQuery,
+            ConfiguratorQuery,
+            BackofficeQuery,
             ):
     pass
 
@@ -69,6 +73,7 @@ class Mutation(UserMutation,
                 SerialCounterMutation,
                 AgentMutation,
                 EngravingTemplateMutation,
+                BackofficeMutation,
                 ):
     pass
 
