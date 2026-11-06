@@ -6,7 +6,7 @@ from django.contrib.auth.models import AnonymousUser, Group
 
 from haeron_backend.schema import schema
 
-from ..models import InstrumentType, Option, PartType
+from ..models import InstrumentType, Option, PartType, Product, ProductSchema, ProductType
 
 
 def run(query, user, **variables):
@@ -51,6 +51,23 @@ def test_create_update_delete(staff):
     deleted = run("mutation ($pk: ID!) { backoffice { deleteOption(pk: $pk) } }", staff, pk=pk)
     assert deleted.data["backoffice"]["deleteOption"] is True
     assert not Option.objects.filter(pk=pk).exists()
+
+
+def test_emptied_text_field_is_saved_as_empty(staff):
+    product = Product.objects.create(
+        name="Starlight",
+        price=0,
+        product_type=ProductType.objects.create(code="bundle"),
+        product_schema=ProductSchema.objects.create(name="starlight", code="starlight"),
+    )
+    result = run(
+        "mutation ($data: BoProductUpdateInput!) { backoffice { updateProduct(data: $data) { name } } }",
+        staff,
+        data={"pk": str(product.pk), "image": None, "model3d": "/models/starlight.glb"},
+    )
+    assert result.errors is None
+    product.refresh_from_db()
+    assert (product.image, product.model_3d) == ("", "/models/starlight.glb")
 
 
 def test_validation_error_is_readable(staff):

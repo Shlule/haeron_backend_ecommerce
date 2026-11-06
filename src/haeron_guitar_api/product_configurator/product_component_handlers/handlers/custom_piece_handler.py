@@ -70,6 +70,7 @@ class CustomPieceHandler(BaseComponentHandler):
             "type": "custom_piece",
             "component": component.key,
             "part_model_id": str(part_model.uuid),
+            "part_model": part_model.name,
             "options": [
                 {
                     "id": str(part_model_option.uuid),

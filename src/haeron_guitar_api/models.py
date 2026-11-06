@@ -278,12 +278,16 @@ class Product(models.Model):
     name = models.CharField(max_length=255)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     product_type = models.ForeignKey("ProductType", related_name="type_products", on_delete=models.PROTECT)
+    # no schema : the product is not configurable, it is sold as it is (accessory, strings...)
     product_schema = models.ForeignKey(
-        "ProductSchema", related_name="schema_products", on_delete=models.SET_NULL, null=True
+        "ProductSchema", related_name="schema_products", on_delete=models.SET_NULL, null=True, blank=True
     )
     instrument_model = models.ForeignKey(
         "InstrumentModel", related_name="products", null=True, blank=True, on_delete=models.SET_NULL
     )
+    # shop display : picture of the product card and 3D model of the configurator, paths served by the front (ex: /models/starlight.glb)
+    image = models.CharField(max_length=255, blank=True, default="")
+    model_3d = models.CharField(max_length=255, blank=True, default="")
 
 
 class ProductType(models.Model):

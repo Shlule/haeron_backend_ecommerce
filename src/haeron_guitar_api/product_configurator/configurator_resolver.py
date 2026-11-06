@@ -43,6 +43,8 @@ def build_configurator_template(product):
             "name": product.name,
             "price": float(product.price),
             "type": product.product_type.code,
+            "image": product.image,
+            "model3d": product.model_3d,
         },
         "components": configuration.components,
         "rules": [engine.serialize_rule_json(rule) for rule in rules],

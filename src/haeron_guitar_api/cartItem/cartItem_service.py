@@ -62,9 +62,10 @@ class CartItemService:
 
             snapshot, total_price = handler.resolve(product, dto.configuration)
 
+        # a product without schema is not configurable : no rule to check
         engine = RuleEngine()
-        rules_snapshot = engine.collect_rules(product)
-        rules_snapshot = [engine.serialize_rule(rule) for rule in rules_snapshot["rules"]]
+        rules_snapshot = engine.collect_rules(product)["rules"] if product.product_schema_id else []
+        rules_snapshot = [engine.serialize_rule(rule) for rule in rules_snapshot]
         if rules_snapshot:
             rule_checking_data = ConfigurationNormalizer.normalize(snapshot=snapshot)
             rules_violation = engine.check(configuration=rule_checking_data, rules=rules_snapshot)

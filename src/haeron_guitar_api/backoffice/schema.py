@@ -212,6 +212,12 @@ def _save(resource, instance, data, created):
         elif field.is_relation:
             setattr(instance, field.attname, value)
         else:
+            # an emptied field arrives as null : a column refusing null gets back its default value ("" for a text)
+            if value is None and not field.null:
+                if field.has_default():
+                    value = field.get_default()
+                elif isinstance(field, (models.CharField, models.TextField)):
+                    value = ""
             setattr(instance, field.name, value)
     try:
         with transaction.atomic():

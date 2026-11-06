@@ -15,6 +15,7 @@ from haeron_guitar_api.serial_counter.serial_counter_resolver import SerialCount
 from haeron_guitar_api.engraving_template.engraving_template_resolver import EngravingTemplateMutation, EngravingTemplateQuery
 from haeron_guitar_api.product_configurator.configurator_resolver import ConfiguratorQuery
 from haeron_guitar_api.backoffice.schema import BackofficeMutation, BackofficeQuery
+from haeron_guitar_api.storefront.storefront_resolver import StorefrontMutation, StorefrontQuery
 
 from provisionning_agent.schema import AgentMutation
 
@@ -55,6 +56,7 @@ class Query(UserQuery,
             EngravingTemplateQuery,
             ConfiguratorQuery,
             BackofficeQuery,
+            StorefrontQuery,
             ):
     pass
 
@@ -74,6 +76,7 @@ class Mutation(UserMutation,
                 AgentMutation,
                 EngravingTemplateMutation,
                 BackofficeMutation,
+                StorefrontMutation,
                 ):
     pass
 
