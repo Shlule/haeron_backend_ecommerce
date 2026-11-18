@@ -46,3 +46,20 @@ tester avec hoppscotch le login
 
 
 ## Enroll agent. 
+
+## Base locale (tester sans toucher Supabase)
+
+Docker lance un Postgres et un Vault de dev (`compose.dev.yaml`), et `local.ps1` lance les commandes Django dessus
+sans modifier le `.env` (qui reste branché sur Supabase).
+
+```
+docker compose -f compose.dev.yaml up -d
+.\local.ps1 migrate
+.\local.ps1 seed_db
+.\local.ps1 create_staff_user admin admin@example.com
+.\local.ps1 runserver
+```
+
+Tests : `.\local.ps1 pytest` (la base de test est créée sur le Postgres local).
+Repartir de zéro : `docker compose -f compose.dev.yaml down -v`, puis `migrate` et `seed_db`.
+Si Windows refuse le script : `powershell -ExecutionPolicy Bypass -File .\local.ps1 migrate`.
