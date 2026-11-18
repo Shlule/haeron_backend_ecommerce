@@ -18,6 +18,9 @@ class AuditMixin(models.Model):
         abstract = True
 
 
+SALE_STATUSES = [("in_stock", "En stock"), ("reserved", "Réservé"), ("sold", "Vendu")]
+
+
 class InstrumentHistory(AuditMixin):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     instrument = models.ForeignKey("Instrument", on_delete=models.CASCADE, related_name="history")
@@ -55,6 +58,12 @@ class Instrument(AuditMixin):
         limit_choices_to={"is_master": True},
     )
     instrument_model = models.ForeignKey("InstrumentModel", on_delete=models.PROTECT, related_name="instruments")
+    description = models.TextField(blank=True, default="")
+    # configuration it was built from (order line snapshot or composition typed in the back-office)
+    configuration = models.JSONField(default=dict, blank=True)
+    # sold or not : selling the instrument sells its parts (see ProductionService.set_status)
+    status = models.CharField(max_length=20, choices=SALE_STATUSES, default="in_stock", db_index=True)
+    sold_at = models.DateTimeField(null=True, blank=True)
 
 
 class InstrumentModel(models.Model):
@@ -139,6 +148,9 @@ class Part(AuditMixin):
         on_delete=models.PROTECT,
     )
     is_master = models.BooleanField(default=False)
+    description = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=20, choices=SALE_STATUSES, default="in_stock", db_index=True)
+    sold_at = models.DateTimeField(null=True, blank=True)
     production_snapshot = models.JSONField(
         default=dict,
         blank=True,

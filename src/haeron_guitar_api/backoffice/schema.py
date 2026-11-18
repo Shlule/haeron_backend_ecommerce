@@ -27,6 +27,8 @@ from authUser.permission.permission import HasRole, IsAuthenticated
 
 from ..finance.finance_service import FinanceService
 from ..order.order_service import OrderService
+from ..production.part_model_builder import PartModelBuilder
+from ..production.production_service import EVENT_TYPES, ProductionService
 from .registry import COMMON_EXCLUDE, REGISTERED, RESOURCES
 
 READ_ROLES = ("superadmin", "admin", "rnd", "production_manager")
@@ -395,6 +397,214 @@ def _finances(date_from: Optional[datetime.date] = None, date_to: Optional[datet
 _query_fields["finances"] = strawberry.field(
     resolver=_finances, permission_classes=[IsAuthenticated, HasRole(*FINANCE_ROLES)]
 )
+
+# workshop : instruments and parts made, their history (see production/production_service.py)
+@strawberry.input
+class BoOptionPriceInput:
+    """Supplement of a chosen value for this part only (the catalogue price stays as it is)."""
+
+    option_id: uuid.UUID
+    price_delta: decimal.Decimal
+
+
+@strawberry.input
+class BoPartLineInput:
+    part_model_id: Optional[uuid.UUID] = None
+    option_ids: list[uuid.UUID] = strawberry.field(default_factory=list)
+    option_prices: list[BoOptionPriceInput] = strawberry.field(default_factory=list)
+    description: str = ""
+    existing_part_id: Optional[uuid.UUID] = None
+
+
+@strawberry.input
+class BoBuildInstrumentInput:
+    instrument_model_id: uuid.UUID
+    factory_id: uuid.UUID
+    parts: list[BoPartLineInput]
+    master_index: int = 0
+    description: str = ""
+    owner_email: Optional[str] = None
+    order_id: Optional[uuid.UUID] = None
+    order_item_index: Optional[int] = None
+    status: Optional[str] = None  # sold when made for an order, else in stock
+
+
+@strawberry.input
+class BoBuildPartInput:
+    part_model_id: uuid.UUID
+    factory_id: uuid.UUID
+    instrument_type_id: uuid.UUID
+    option_ids: list[uuid.UUID] = strawberry.field(default_factory=list)
+    option_prices: list[BoOptionPriceInput] = strawberry.field(default_factory=list)
+    description: str = ""
+    owner_email: Optional[str] = None
+    is_master: bool = False
+    status: Optional[str] = None
+
+
+@strawberry.input
+class BoHistoryEventInput:
+    target: str  # "instrument" or "part"
+    target_id: uuid.UUID
+    event_type: str
+    title: str = ""
+    description: str = ""
+
+
+def _staff_user(info):
+    return info.context["request"].user
+
+
+def _production(call):
+    try:
+        return call()
+    except ValidationError as error:
+        raise Exception(_error_message(error)) from error
+
+
+def _production_form() -> JSON:
+    return ProductionService.form_data()
+
+
+def _history_event_types() -> JSON:
+    return [{"value": value, "label": label} for value, label in EVENT_TYPES]
+
+
+def _instruments(
+    offset: int = 0, limit: int = 50, search: Optional[str] = None, status: Optional[str] = None
+) -> JSON:
+    return ProductionService.instruments(offset, limit, search, status)
+
+
+def _instrument_sheet(instrument_id: uuid.UUID) -> Optional[JSON]:
+    return ProductionService.instrument_sheet(instrument_id)
+
+
+def _produced_parts(
+    offset: int = 0,
+    limit: int = 50,
+    search: Optional[str] = None,
+    free_only: bool = False,
+    status: Optional[str] = None,
+) -> JSON:
+    return ProductionService.parts(offset, limit, search, free_only, status)
+
+
+def _part_sheet(part_id: uuid.UUID) -> Optional[JSON]:
+    return ProductionService.part_sheet(part_id)
+
+
+def _build_instrument(info: strawberry.Info, data: BoBuildInstrumentInput) -> JSON:
+    payload = strawberry.asdict(data)
+    return _production(lambda: ProductionService.build_instrument(payload, _staff_user(info)))
+
+
+def _build_part(info: strawberry.Info, data: BoBuildPartInput) -> JSON:
+    payload = strawberry.asdict(data)
+    return _production(lambda: ProductionService.build_part(payload, _staff_user(info)))
+
+
+def _update_instrument_info(
+    info: strawberry.Info, instrument_id: uuid.UUID, description: Optional[str] = None, owner_email: Optional[str] = None
+) -> JSON:
+    return _production(
+        lambda: ProductionService.update_instrument(instrument_id, description, owner_email, _staff_user(info))
+    )
+
+
+def _update_part_info(info: strawberry.Info, part_id: uuid.UUID, description: str) -> JSON:
+    return _production(lambda: ProductionService.update_part(part_id, description, _staff_user(info)))
+
+
+def _create_part_batch(part_model_id: uuid.UUID, name: str, code: str) -> JSON:
+    return _production(lambda: ProductionService.create_batch(part_model_id, name, code))
+
+
+def _add_history_event(info: strawberry.Info, data: BoHistoryEventInput) -> JSON:
+    return _production(
+        lambda: ProductionService.add_event(
+            data.target, data.target_id, data.event_type, data.title, data.description, _staff_user(info)
+        )
+    )
+
+
+def _set_production_status(
+    info: strawberry.Info, target: str, target_id: uuid.UUID, status: str, note: str = ""
+) -> JSON:
+    return _production(lambda: ProductionService.set_status(target, target_id, status, note, _staff_user(info)))
+
+
+def _delete_history_event(event_id: uuid.UUID) -> bool:
+    return _production(lambda: ProductionService.delete_event(event_id))
+
+
+_query_fields["production_form"] = strawberry.field(resolver=_production_form)
+_query_fields["history_event_types"] = strawberry.field(resolver=_history_event_types)
+_query_fields["instruments"] = strawberry.field(resolver=_instruments)
+_query_fields["instrument_sheet"] = strawberry.field(resolver=_instrument_sheet)
+_query_fields["produced_parts"] = strawberry.field(resolver=_produced_parts)
+_query_fields["part_sheet"] = strawberry.field(resolver=_part_sheet)
+# making parts gives serial numbers and fixes their options for good : managers only
+BUILD_ROLES = ("superadmin", "admin")
+_build_permissions = [IsAuthenticated, HasRole(*BUILD_ROLES)]
+
+
+def _can_build_parts(info: strawberry.Info) -> bool:
+    user = _staff_user(info)
+    return bool(user.is_authenticated and user.groups.filter(name__in=BUILD_ROLES).exists())
+
+
+_query_fields["can_build_parts"] = strawberry.field(resolver=_can_build_parts)
+_mutation_fields["build_instrument"] = strawberry.mutation(resolver=_build_instrument, permission_classes=_build_permissions)
+_mutation_fields["build_part"] = strawberry.mutation(resolver=_build_part, permission_classes=_build_permissions)
+_mutation_fields["update_instrument_info"] = strawberry.mutation(resolver=_update_instrument_info)
+_mutation_fields["update_part_info"] = strawberry.mutation(resolver=_update_part_info)
+_mutation_fields["create_part_batch"] = strawberry.mutation(resolver=_create_part_batch, permission_classes=_build_permissions)
+
+
+# new part model of the catalogue with its options and values in one form : managers only, like making parts
+@strawberry.input
+class BoOptionValueInput:
+    code: str
+    name: str = ""
+    price_delta: decimal.Decimal = decimal.Decimal(0)
+
+
+@strawberry.input
+class BoPartModelOptionGroupInput:
+    option_id: Optional[uuid.UUID] = None
+    new_option_name: Optional[str] = None
+    values: list[BoOptionValueInput] = strawberry.field(default_factory=list)
+
+
+@strawberry.input
+class BoNewPartModelInput:
+    name: str
+    code: str
+    part_type_id: uuid.UUID
+    series_id: Optional[uuid.UUID] = None
+    price: decimal.Decimal = decimal.Decimal(0)
+    status: str = "active"
+    options: list[BoPartModelOptionGroupInput] = strawberry.field(default_factory=list)
+
+
+def _part_model_form() -> JSON:
+    return PartModelBuilder.form_data()
+
+
+def _create_part_model_with_options(data: BoNewPartModelInput) -> JSON:
+    payload = strawberry.asdict(data)
+    return _production(lambda: PartModelBuilder.create(payload))
+
+
+_query_fields["part_model_form"] = strawberry.field(resolver=_part_model_form)
+_mutation_fields["create_part_model_with_options"] = strawberry.mutation(
+    resolver=_create_part_model_with_options, permission_classes=_build_permissions
+)
+_mutation_fields["add_history_event"] = strawberry.mutation(resolver=_add_history_event)
+_mutation_fields["delete_history_event"] = strawberry.mutation(resolver=_delete_history_event)
+_mutation_fields["set_production_status"] = strawberry.mutation(resolver=_set_production_status)
+
 
 BackofficeQueries = strawberry.type(type("BackofficeQueries", (), {"__module__": __name__, **_query_fields}))
 BackofficeMutations = strawberry.type(type("BackofficeMutations", (), {"__module__": __name__, **_mutation_fields}))
