@@ -5,6 +5,7 @@ from strawberry.scalars import JSON
 
 from ..models import Product
 from .builder import build_product_configuration
+from .product_loader import load_product
 from .configuration_normalizer import ConfigurationNormalizer
 from .configuration_rule_engine import RuleEngine
 from .product_type_handlers.product_type_registry import ProductTypeHandlerRegistry
@@ -18,11 +19,7 @@ from .product_type_handlers import handlers as _product_type_handlers  # noqa: F
 
 
 def _get_product(product_id):
-    return (
-        Product.objects.select_related("product_type", "product_schema", "instrument_model")
-        .prefetch_related("product_schema__product_components")
-        .get(pk=product_id)
-    )
+    return load_product(product_id)
 
 
 def _error_message(error):

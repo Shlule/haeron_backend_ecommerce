@@ -20,7 +20,7 @@ import strawberry
 import strawberry_django
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
-from django.db.models import ProtectedError, Q
+from django.db.models import Prefetch, ProtectedError, Q
 from strawberry.scalars import JSON
 
 from authUser.permission.permission import HasRole, IsAuthenticated
@@ -132,27 +132,40 @@ def _label(instance, depth=0) -> str:
     return f"{resource.label if resource else type(instance).__name__} {str(instance.pk)[:8]}"
 
 
+def _many_resolver(name, target):
+    # reads the rows prefetched by _with_relations (a strawberry_django relation would query again)
+    def resolve(self) -> list[target]:
+        return list(getattr(self, name).all())
+
+    return strawberry.field(resolver=resolve)
+
+
 def _build_type(resource):
     """`BoX` : the GraphQL type of a table."""
     pk = resource.model._meta.pk
     annotations = {}
     names = [pk.name]
+    many = {}
     for field in _fields(resource):
         if field.primary_key:
             continue
-        names.append(field.name)
         if field.is_relation:
             target = f"Bo{field.related_model.__name__}"
             lazy = Annotated[target, strawberry.lazy(__name__)]
-            annotations[field.name] = list[lazy] if field.many_to_many else (Optional[lazy] if field.null else lazy)
+            if field.many_to_many:
+                many[field.name] = _many_resolver(field.name, lazy)
+                continue
+            names.append(field.name)
+            annotations[field.name] = Optional[lazy] if field.null else lazy
         else:
+            names.append(field.name)
             annotations[field.name] = strawberry.auto
     annotations[pk.name] = strawberry.auto
 
     def label(self) -> str:
         return _label(self)
 
-    namespace = {"__annotations__": annotations, "__module__": __name__, "label": strawberry.field(resolver=label)}
+    namespace = {"__annotations__": annotations, "__module__": __name__, "label": strawberry.field(resolver=label), **many}
     cls = type(f"Bo{resource.name}", (), namespace)
     return strawberry_django.type(resource.model, fields=names)(cls)
 
@@ -236,6 +249,24 @@ def _save(resource, instance, data, created):
     return instance
 
 
+def _with_relations(resource, queryset):
+    """Rows with their linked rows read in the same query (foreign keys) or one query per relation (many to many),
+    instead of one query per row and per relation. The linked rows keep their own foreign keys too :
+    their label (str) often reads them, e.g. a part model shows its part type."""
+    def own_joins(model):
+        return [sub.name for sub in model._meta.concrete_fields if sub.is_relation]
+
+    joins, many = [], []
+    for field in _fields(resource):
+        if field.many_to_many:
+            target = field.related_model
+            many.append(Prefetch(field.name, queryset=target._default_manager.select_related(*own_joins(target))))
+        elif field.is_relation:
+            joins.append(field.name)
+            joins.extend(f"{field.name}__{name}" for name in own_joins(field.related_model))
+    return queryset.select_related(*joins).prefetch_related(*many)
+
+
 def _search(resource, queryset, text):
     text = (text or "").strip()
     if not text:
@@ -305,8 +336,11 @@ for _resource in RESOURCES:
     def _make_list(resource=_resource, node=_node, page=_page):
         def resolve(offset: int = 0, limit: int = 50, search: Optional[str] = None) -> page:
             queryset = _search(resource, resource.model._default_manager.all(), search).order_by(*_ordering(resource))
+            # count without the joins, then the page with its linked rows
+            total = queryset.count()
+            queryset = _with_relations(resource, queryset)
             limit = max(1, min(limit, 200))
-            return page(total_count=queryset.count(), results=list(queryset[offset : offset + limit]))
+            return page(total_count=total, results=list(queryset[offset : offset + limit]))
 
         return resolve
 

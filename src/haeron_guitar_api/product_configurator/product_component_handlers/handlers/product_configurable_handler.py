@@ -4,6 +4,7 @@ from ....models import Product, ProductComponentChoice
 from ..product_component_registry import ComponentHandlerRegistry
 from ...product_type_handlers.product_type_registry import ProductTypeHandlerRegistry
 from ..handlers.base_component_handler import BaseComponentHandler
+from ...product_loader import load_product
 from ....types.product_configurator_types import ProductConfigurableComponent
 
 
@@ -26,11 +27,12 @@ class ProductConfigurableHandler(BaseComponentHandler):
             raise ValidationError("product_id is required")
 
         try:
-            nested_product = Product.objects.get(pk=product_id)
+            # loaded with its own schema : the nested configuration is resolved without extra queries
+            nested_product = load_product(product_id)
         except Product.DoesNotExist:
             raise Product.DoesNotExist("Product does not exist")
 
-        if not ProductComponentChoice.objects.filter(component=component, product=nested_product).exists():
+        if not any(choice.product_id == nested_product.pk for choice in component.product_component_choices.all()):
             raise ValidationError(f"Product {product_id} not allowed for component {component.key}")
 
         handler = ProductTypeHandlerRegistry.get_handler(nested_product.product_type.code)
@@ -40,11 +42,11 @@ class ProductConfigurableHandler(BaseComponentHandler):
 
         return {"nested_product": nested_product, "handler": handler, "nested_config": config.get("configuration", {})}
 
-    def _resolve(self, component, config, product=None, **kwargs):
-        nested_product = Product.objects.get(pk=config.get("product_id"))
+    def _resolve(self, component, config, product=None, validated=None, **kwargs):
+        validated = validated or self._validate_business(component, config, product)
+        nested_product = validated["nested_product"]
         config = config.get("configuration", {})
-
-        handler = ProductTypeHandlerRegistry.get_handler(nested_product.product_type.code)
+        handler = validated["handler"]
 
         snapshot, price = handler.resolve(nested_product, config)
 
@@ -57,11 +59,9 @@ class ProductConfigurableHandler(BaseComponentHandler):
         }
 
     def bulk_build_configuration(self, components, product):
-        choices = ProductComponentChoice.objects.filter(component__in=components).select_related("product", "component")
-
-        choices_by_component = {}
-        for choice in choices:
-            choices_by_component.setdefault(choice.component_id, []).append(choice.product)
+        choices_by_component = {
+            comp.uuid: [choice.product for choice in comp.product_component_choices.all()] for comp in components
+        }
 
         result = []
 

@@ -130,7 +130,7 @@ def test_collect_rules_and_serialize_integration(collect_rule_setup, django_asse
 
     engine = RuleEngine()
 
-    with django_assert_num_queries(7):  # ajuste selon ton optimisation
+    with django_assert_num_queries(5):  # rules + conditions + results + their values (prefetch)
         snapshot = engine.collect_rules(product)
 
     rules = snapshot["rules"]

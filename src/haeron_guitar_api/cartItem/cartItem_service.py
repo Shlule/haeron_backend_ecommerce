@@ -7,6 +7,7 @@ from ..models import CartItem, Product
 from haeron_guitar_api.cart.cart_dto import CreateCartDTO
 from haeron_guitar_api.product_configurator.configuration_normalizer import ConfigurationNormalizer
 from haeron_guitar_api.product_configurator.configuration_rule_engine import RuleEngine
+from haeron_guitar_api.product_configurator.product_loader import load_product
 import hashlib
 import json
 
@@ -79,11 +80,7 @@ class CartItemService:
 
     @staticmethod
     def _product(product_id):
-        return (
-            Product.objects.select_related("product_type", "product_schema")
-            .prefetch_related("product_schema__product_components")
-            .get(pk=product_id)
-        )
+        return load_product(product_id)
 
     @staticmethod
     def _resolve(product, configuration):

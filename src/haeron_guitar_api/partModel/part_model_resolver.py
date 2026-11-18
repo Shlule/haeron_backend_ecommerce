@@ -25,7 +25,7 @@ class PartModelQuery:
 
     @strawberry.field(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "rnd", "production_manager")])
     def get_all_part_model(self) -> List[PartModelGQLType]:
-        return PartModel.objects.all()
+        return PartModel.objects.select_related("part_type", "series")
 
 
 @strawberry.type

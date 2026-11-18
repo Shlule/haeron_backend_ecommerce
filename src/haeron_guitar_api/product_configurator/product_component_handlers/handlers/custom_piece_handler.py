@@ -27,8 +27,10 @@ class CustomPieceHandler(BaseComponentHandler):
 
         part_model = PartModel.objects.get(pk=part_model_id)
         # a value switched off in the back-office can no longer be ordered
-        part_model_options = PartModelOption.objects.select_related("option").filter(
-            pk__in=part_model_option_ids, part_model=part_model, is_active=True
+        part_model_options = list(
+            PartModelOption.objects.select_related("option").filter(
+                pk__in=part_model_option_ids, part_model=part_model, is_active=True
+            )
         )
 
         options = [part_model_option.option.name for part_model_option in part_model_options]
@@ -37,31 +39,29 @@ class CustomPieceHandler(BaseComponentHandler):
         if option_duplicates:
             raise ValidationError(f"to much value selected for option {option_duplicates}")
 
-        if part_model_options.count() != len(part_model_option_ids):
+        if len(part_model_options) != len(part_model_option_ids):
             raise ValidationError("invalid Options")
 
         return {"part_model": part_model, "part_models_options": part_model_options}
 
-    def _resolve(self, component, config, product=None, **kwargs):
+    def _resolve(self, component, config, product=None, validated=None, **kwargs):
 
         if not config or "part_model_id" not in config:
             raise ValidationError(f"{component} requires part_model_id")
 
-        part_model = PartModel.objects.select_related("part_type").get(pk=config["part_model_id"])
-
-        part_model_options_ids = config.get("part_model_option_ids", [])
-        selected_part_model_options = PartModelOption.objects.filter(
-            part_model=part_model, pk__in=part_model_options_ids, is_active=True
-        )
-
-        if len(part_model_options_ids) != selected_part_model_options.count():
-            raise ValidationError("Invalid options")
+        # part model and options already read (and checked) by validate
+        validated = validated or self._validate_business(component, config, product)
+        part_model = validated["part_model"]
+        selected_part_model_options = validated["part_models_options"]
 
         base_price = part_model.price
         options_price = sum(option.price_delta for option in selected_part_model_options)
-        if product.instrument_model:
-            is_valid = ComponentCompatibility.objects.filter(
-                instrument_model=product.instrument_model, component=component, part_model=part_model
+        if product.instrument_model_id:
+            # compatibilities are loaded with the product (see product_loader) : no query here
+            is_valid = any(
+                compatibility.instrument_model_id == product.instrument_model_id
+                and compatibility.part_model_id == part_model.pk
+                for compatibility in component.component_compatibilities.all()
             )
             if not is_valid:
                 raise ValidationError(f"{part_model.code}, not compatible with {component}")

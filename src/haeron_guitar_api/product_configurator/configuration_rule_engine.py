@@ -9,6 +9,7 @@ from ..models import (
     PartModel,
     ProductComponent,
     PartModelOption,
+    SelectableValue,
 )
 
 from .rule_engine_dto import RuleDTO, ConditionDTO, ValueDTO, ResultDTO
@@ -26,22 +27,40 @@ class RuleEngine:
             component.allowed_values = result.allowed_values
             component.disabled = False
 
-    def collect_rules(self, product: Product):
+    @staticmethod
+    def rules_queryset():
+        """Rules with everything the serializers read, in 5 queries whatever the number of rules."""
+        values = SelectableValue.objects.select_related("part_model_option", "product_component_choice__product")
+        return ConfigurationRule.objects.prefetch_related(
+            models.Prefetch(
+                "conditions",
+                queryset=ConfigurationCondition.objects.select_related("source_component", "source_option").prefetch_related(
+                    models.Prefetch("compare_values", queryset=values)
+                ),
+            ),
+            models.Prefetch(
+                "results",
+                queryset=ConfigurationResult.objects.select_related("target_component", "target_option").prefetch_related(
+                    models.Prefetch("target_values", queryset=values)
+                ),
+            ),
+        )
 
+    def collect_rules(self, product: Product, with_catalog=False):
         part_models = PartModel.objects.filter(
             componentcompatibility__component__product_schemas=product.product_schema
         ).distinct()
 
-        rules = ConfigurationRule.objects.filter(
+        rules = self.rules_queryset().filter(
             models.Q(target_schema=product.product_schema)
             | models.Q(target_component__product_schemas=product.product_schema)
             | models.Q(target_part_model__in=part_models)
-        ).prefetch_related(
-            "conditions",
-            "results",
-            "conditions__source_component",
-            "results__target_component",
         )
+        # the OR on joined tables can return a rule several times : one of each, in the database order
+        snapshot = {"rules": list({rule.pk: rule for rule in rules}.values())}
+        if not with_catalog:
+            # the configurator and the cart only need the rules
+            return snapshot
 
         compatibilities = ComponentCompatibility.objects.filter(
             component__product_schemas=product.product_schema, instrument_model=product.instrument_model
@@ -50,11 +69,9 @@ class RuleEngine:
         part_model_options = PartModelOption.objects.filter(
             part_model__componentcompatibility__component__product_schemas=product.product_schema
         ).select_related("option", "part_model")
-        return {
-            "rules": list(rules),
-            "compatibilities": list(compatibilities),
-            "part_model_options": list(part_model_options),
-        }
+        snapshot["compatibilities"] = list(compatibilities)
+        snapshot["part_model_options"] = list(part_model_options)
+        return snapshot
 
     def serialize_rule(self, rule: ConfigurationRule):
         return RuleDTO(
