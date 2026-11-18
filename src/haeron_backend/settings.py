@@ -174,7 +174,6 @@ EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='no-reply@example.com')
 
 # EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
-DEFAULT_FROM_EMAIL = "no-reply@example.com"
 
 SITE_ID = 1
 

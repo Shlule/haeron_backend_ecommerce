@@ -3,7 +3,10 @@ from decimal import Decimal
 
 import stripe
 from decouple import config
+from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.mail import send_mail
+from django.utils.html import escape
 from django.db import transaction
 from django.utils import timezone
 
@@ -79,6 +82,51 @@ class PaymentService:
             livemode=bool(_get(session, "livemode", False)),
         )
         return _get(session, "url")
+
+    @staticmethod
+    def payment_link(order):
+        """Link to give the customer : the order page of the shop, which opens a new Stripe page right away.
+        A Stripe page itself expires after 24 hours, this link does not."""
+        return f"{SHOP_URL}/commande/{order.uuid}?payer=1"
+
+    @staticmethod
+    def send_payment_link(order_uuid):
+        """E-mails the payment link of a pending order to its customer (back-office : payment failed or never made)."""
+        order = Order.objects.filter(uuid=order_uuid).first()
+        if order is None:
+            raise ValidationError("Commande introuvable.")
+        if order.status != "pending":
+            raise ValidationError("Cette commande n'attend pas de paiement.")
+        if not order.email:
+            raise ValidationError("Cette commande n'a pas d'adresse e-mail.")
+        if not order.total_price:
+            raise ValidationError("Cette commande n'a rien à payer.")
+        link = PaymentService.payment_link(order)
+        reference = str(order.uuid)[:8].upper()
+        total = f"{order.total_price:.2f}".replace(".", ",")
+        greeting = f"Bonjour {order.first_name}" if order.first_name else "Bonjour"
+        send_mail(
+            f"Haeron Guitar : paiement de votre commande {reference}",
+            (
+                f"{greeting},\n\n"
+                f"Votre commande {reference} est enregistrée mais son paiement n'a pas encore abouti.\n"
+                f"Vous pouvez la payer ({total} €) en suivant ce lien :\n\n{link}\n\n"
+                "Le paiement est sécurisé par Stripe. Si vous avez déjà payé, vous pouvez ignorer ce message.\n\n"
+                "Haeron Guitar"
+            ),
+            settings.DEFAULT_FROM_EMAIL,
+            [order.email],
+            html_message=(
+                f"<p>{escape(greeting)},</p>"
+                f"<p>Votre commande <strong>{reference}</strong> est enregistrée mais son paiement n'a pas encore abouti.</p>"
+                f'<p><a href="{link}" style="display:inline-block;padding:12px 24px;background:#000;color:#fff;'
+                f'border-radius:999px;text-decoration:none">Payer ma commande · {total} €</a></p>'
+                "<p>Le paiement est sécurisé par Stripe. Si vous avez déjà payé, vous pouvez ignorer ce message.</p>"
+                "<p>Haeron Guitar</p>"
+            ),
+        )
+        logger.info("Payment link of order %s sent", reference)
+        return {"email": order.email, "link": link}
 
     @staticmethod
     def confirm_checkout(order_uuid, session_id):

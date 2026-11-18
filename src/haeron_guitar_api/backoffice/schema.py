@@ -27,6 +27,7 @@ from authUser.permission.permission import HasRole, IsAuthenticated
 
 from ..finance.finance_service import FinanceService
 from ..order.order_service import OrderService
+from ..payments.payment_service import PaymentService
 from ..production.part_model_builder import PartModelBuilder
 from ..production.piece_product_builder import PieceProductBuilder
 from ..production.product_catalogue import ProductCatalogue
@@ -424,6 +425,12 @@ _query_fields["orders"] = strawberry.field(resolver=_orders)
 # "order" is already the generic read of the Order table
 _query_fields["order_sheet"] = strawberry.field(resolver=_order_sheet)
 _mutation_fields["set_order_status"] = strawberry.mutation(resolver=_set_order_status)
+
+
+def _send_payment_link(order_id: uuid.UUID) -> JSON:
+    return _production(lambda: PaymentService.send_payment_link(order_id))
+
+
 # money in and out (payments, refunds, Stripe fees) : managers only
 FINANCE_ROLES = ("superadmin", "admin")
 
@@ -873,6 +880,7 @@ _add_mutation("catalogue_save_value", _catalogue_save_value)
 _add_mutation("catalogue_delete_value", _catalogue_delete_value)
 _add_mutation("catalogue_link", _catalogue_link)
 _add_mutation("catalogue_unlink", _catalogue_unlink)
+_add_mutation("send_payment_link", _send_payment_link)
 _mutation_fields["add_history_event"] = strawberry.mutation(resolver=_add_history_event)
 _mutation_fields["delete_history_event"] = strawberry.mutation(resolver=_delete_history_event)
 _mutation_fields["set_production_status"] = strawberry.mutation(resolver=_set_production_status)

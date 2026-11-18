@@ -145,3 +145,36 @@ def test_order_marked_paid_by_hand_counts_in_finances(staff, order):  # noqa: F8
 def test_finances_are_for_managers_only(staff, order):  # noqa: F811
     staff.groups.set([Group.objects.create(name="rnd")])
     assert run_staff(FINANCES, staff).errors
+
+
+SHEET = "query ($id: UUID!) { backoffice { orderSheet(orderId: $id) } }"
+SEND_LINK = "mutation ($id: UUID!) { backoffice { sendPaymentLink(orderId: $id) } }"
+
+
+def test_unpaid_order_gets_a_payment_link_by_email(staff, order, stripe_api, mailoutbox):  # noqa: F811
+    # the customer left the Stripe page without paying
+    stripe_api["create"].return_value = session(order, paid=False)
+    run_shop(PAY, id=str(order.uuid))
+    Payment.objects.update(status="expired")
+
+    sheet = run_staff(SHEET, staff, id=str(order.uuid)).data["backoffice"]["orderSheet"]
+    assert sheet["paymentLink"].endswith(f"/commande/{order.uuid}?payer=1")
+    assert sheet["unpaidAttempts"] == 1
+
+    sent = run_staff(SEND_LINK, staff, id=str(order.uuid))
+    assert sent.errors is None
+    assert sent.data["backoffice"]["sendPaymentLink"]["email"] == "jean@example.com"
+    mail = mailoutbox[0]
+    assert mail.to == ["jean@example.com"] and str(order.uuid)[:8].upper() in mail.subject
+    assert sheet["paymentLink"] in mail.body and "290,00 €" in mail.body
+
+    # the link opens a new Stripe page, the order is still payable
+    stripe_api["create"].return_value = session(order, paid=False, session_id="cs_test_2")
+    assert run_shop(PAY, id=str(order.uuid)).errors is None
+
+    # once paid : no link any more, and none sent
+    stripe_api["retrieve"].return_value = session(order, session_id="cs_test_2")
+    run_shop(CONFIRM, id=str(order.uuid), session="cs_test_2")
+    assert run_staff(SHEET, staff, id=str(order.uuid)).data["backoffice"]["orderSheet"]["paymentLink"] is None
+    assert "n'attend pas" in run_staff(SEND_LINK, staff, id=str(order.uuid)).errors[0].message
+    assert len(mailoutbox) == 1

@@ -35,7 +35,7 @@ class OrderService:
         order = (
             Order.objects.prefetch_related(
                 Prefetch("order_items", queryset=OrderItem.objects.order_by("pk")),
-                Prefetch("payments", queryset=Payment.objects.exclude(status__in=["pending", "expired"]).order_by("created_at")),
+                Prefetch("payments", queryset=Payment.objects.order_by("created_at")),
             )
             .filter(uuid=order_uuid)
             .first()
@@ -43,6 +43,8 @@ class OrderService:
         if order is None:
             return None
         items = list(order.order_items.all())
+        payments = list(order.payments.all())
+        unpaid = ["pending", "expired"]  # Stripe pages opened without paying
         catalog = OrderService._catalog(items)
         return {
             **OrderService._summary(order, item_count=sum(item.quantity for item in items)),
@@ -51,8 +53,11 @@ class OrderService:
             "postalCode": order.postal_code,
             "country": order.country,
             "userId": str(order.user_id) if order.user_id else None,
-            # Stripe pages left without paying are not shown (filtered in the prefetch)
-            "payments": [PaymentService.serialize(payment) for payment in order.payments.all()],
+            # Stripe pages left without paying are not shown
+            "payments": [PaymentService.serialize(payment) for payment in payments if payment.status not in unpaid],
+            # not paid yet : the link to give the customer, and how many Stripe pages were opened without paying
+            "paymentLink": PaymentService.payment_link(order) if order.status == "pending" else None,
+            "unpaidAttempts": sum(1 for p in payments if p.provider == "stripe" and p.status in [*unpaid, "failed"]),
             "items": [
                 {
                     "productId": str(item.product_id),
