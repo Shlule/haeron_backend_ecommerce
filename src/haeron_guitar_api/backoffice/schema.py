@@ -30,6 +30,7 @@ from ..order.order_service import OrderService
 from ..production.part_model_builder import PartModelBuilder
 from ..production.piece_product_builder import PieceProductBuilder
 from ..production.product_catalogue import ProductCatalogue
+from ..production.catalogue_admin import CatalogueAdmin
 from ..production.product_editor import ProductEditor
 from ..production.production_service import EVENT_TYPES, ProductionService
 from .registry import COMMON_EXCLUDE, REGISTERED, RESOURCES
@@ -754,6 +755,124 @@ _add_mutation("save_product", _update_product)
 _add_mutation("add_template_step", _add_product_component)
 _add_mutation("save_template_step", _update_product_component)
 _add_mutation("remove_template_step", _remove_product_component)
+
+
+# ---------------------------------------------------------------- Catalogue : instruments, pieces, options, values
+
+
+@strawberry.input
+class BoCodeNameInput:
+    id: Optional[uuid.UUID] = None
+    name: str = ""
+    code: str = ""
+
+
+@strawberry.input
+class BoInstrumentModelInput:
+    id: Optional[uuid.UUID] = None
+    name: str = ""
+    instrument_type_id: Optional[uuid.UUID] = None
+
+
+@strawberry.input
+class BoOptionInput:
+    id: Optional[uuid.UUID] = None
+    name: str = ""
+    category: str = ""
+    description: str = ""
+
+
+@strawberry.input
+class BoPartModelInput:
+    name: str
+    code: str
+    price: decimal.Decimal
+    status: str
+    part_type_id: uuid.UUID
+    series_id: Optional[uuid.UUID] = None
+
+
+@strawberry.input
+class BoPartModelValueInput:
+    id: Optional[uuid.UUID] = None
+    option_id: Optional[uuid.UUID] = None
+    new_option_name: str = ""
+    name: str = ""
+    code: str = ""
+    price_delta: decimal.Decimal = decimal.Decimal(0)
+    active: bool = True
+
+
+def _catalogue_overview() -> JSON:
+    return CatalogueAdmin.overview()
+
+
+def _catalogue_part_model(part_model_id: uuid.UUID) -> JSON:
+    return _production(lambda: CatalogueAdmin.part_model(part_model_id))
+
+
+def _catalogue_instrument_model(instrument_model_id: uuid.UUID) -> JSON:
+    return _production(lambda: CatalogueAdmin.instrument_model(instrument_model_id))
+
+
+def _catalogue_save_instrument_type(data: BoCodeNameInput) -> JSON:
+    return _production(lambda: CatalogueAdmin.save_instrument_type(strawberry.asdict(data)))
+
+
+def _catalogue_save_instrument_model(data: BoInstrumentModelInput) -> JSON:
+    return _production(lambda: CatalogueAdmin.save_instrument_model(strawberry.asdict(data)))
+
+
+def _catalogue_save_part_type(data: BoCodeNameInput) -> JSON:
+    return _production(lambda: CatalogueAdmin.save_part_type(strawberry.asdict(data)))
+
+
+def _catalogue_save_series(data: BoCodeNameInput) -> JSON:
+    return _production(lambda: CatalogueAdmin.save_series(strawberry.asdict(data)))
+
+
+def _catalogue_save_option(data: BoOptionInput) -> JSON:
+    return _production(lambda: CatalogueAdmin.save_option(strawberry.asdict(data)))
+
+
+def _catalogue_delete_option(option_id: uuid.UUID) -> bool:
+    return _production(lambda: CatalogueAdmin.delete_option(option_id))
+
+
+def _catalogue_save_part_model(part_model_id: uuid.UUID, data: BoPartModelInput) -> JSON:
+    return _production(lambda: CatalogueAdmin.save_part_model(part_model_id, strawberry.asdict(data)))
+
+
+def _catalogue_save_value(part_model_id: uuid.UUID, data: BoPartModelValueInput) -> JSON:
+    return _production(lambda: CatalogueAdmin.save_value(part_model_id, strawberry.asdict(data)))
+
+
+def _catalogue_delete_value(value_id: uuid.UUID) -> JSON:
+    return _production(lambda: CatalogueAdmin.delete_value(value_id))
+
+
+def _catalogue_link(part_model_id: uuid.UUID, instrument_model_id: uuid.UUID, component_id: uuid.UUID) -> bool:
+    return _production(lambda: CatalogueAdmin.link(part_model_id, instrument_model_id, component_id))
+
+
+def _catalogue_unlink(part_model_id: uuid.UUID, instrument_model_id: uuid.UUID, component_id: uuid.UUID) -> bool:
+    return _production(lambda: CatalogueAdmin.unlink(part_model_id, instrument_model_id, component_id))
+
+
+_query_fields["catalogue_overview"] = strawberry.field(resolver=_catalogue_overview)
+_query_fields["catalogue_part_model"] = strawberry.field(resolver=_catalogue_part_model)
+_query_fields["catalogue_instrument_model"] = strawberry.field(resolver=_catalogue_instrument_model)
+_add_mutation("catalogue_save_instrument_type", _catalogue_save_instrument_type)
+_add_mutation("catalogue_save_instrument_model", _catalogue_save_instrument_model)
+_add_mutation("catalogue_save_part_type", _catalogue_save_part_type)
+_add_mutation("catalogue_save_series", _catalogue_save_series)
+_add_mutation("catalogue_save_option", _catalogue_save_option)
+_add_mutation("catalogue_delete_option", _catalogue_delete_option)
+_add_mutation("catalogue_save_part_model", _catalogue_save_part_model)
+_add_mutation("catalogue_save_value", _catalogue_save_value)
+_add_mutation("catalogue_delete_value", _catalogue_delete_value)
+_add_mutation("catalogue_link", _catalogue_link)
+_add_mutation("catalogue_unlink", _catalogue_unlink)
 _mutation_fields["add_history_event"] = strawberry.mutation(resolver=_add_history_event)
 _mutation_fields["delete_history_event"] = strawberry.mutation(resolver=_delete_history_event)
 _mutation_fields["set_production_status"] = strawberry.mutation(resolver=_set_production_status)
