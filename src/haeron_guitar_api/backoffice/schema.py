@@ -25,6 +25,8 @@ from strawberry.scalars import JSON
 
 from authUser.permission.permission import HasRole, IsAuthenticated
 
+from ..finance.finance_service import FinanceService
+from ..order.order_service import OrderService
 from .registry import COMMON_EXCLUDE, REGISTERED, RESOURCES
 
 READ_ROLES = ("superadmin", "admin", "rnd", "production_manager")
@@ -360,6 +362,39 @@ def _resources() -> JSON:
 
 
 _query_fields["resources"] = strawberry.field(resolver=_resources)
+
+
+# orders : list and technical sheet of each item (the generic tables only show the raw snapshot)
+def _orders(offset: int = 0, limit: int = 50, status: Optional[str] = None, search: Optional[str] = None) -> JSON:
+    return OrderService.list(offset, limit, status, search)
+
+
+def _order_sheet(order_id: uuid.UUID) -> Optional[JSON]:
+    return OrderService.detail(order_id)
+
+
+def _set_order_status(order_id: uuid.UUID, status: str) -> JSON:
+    try:
+        return OrderService.set_status(order_id, status)
+    except ValidationError as error:
+        raise Exception(_error_message(error)) from error
+
+
+_query_fields["orders"] = strawberry.field(resolver=_orders)
+# "order" is already the generic read of the Order table
+_query_fields["order_sheet"] = strawberry.field(resolver=_order_sheet)
+_mutation_fields["set_order_status"] = strawberry.mutation(resolver=_set_order_status)
+# money in and out (payments, refunds, Stripe fees) : managers only
+FINANCE_ROLES = ("superadmin", "admin")
+
+
+def _finances(date_from: Optional[datetime.date] = None, date_to: Optional[datetime.date] = None) -> JSON:
+    return FinanceService.summary(date_from, date_to)
+
+
+_query_fields["finances"] = strawberry.field(
+    resolver=_finances, permission_classes=[IsAuthenticated, HasRole(*FINANCE_ROLES)]
+)
 
 BackofficeQueries = strawberry.type(type("BackofficeQueries", (), {"__module__": __name__, **_query_fields}))
 BackofficeMutations = strawberry.type(type("BackofficeMutations", (), {"__module__": __name__, **_mutation_fields}))

@@ -416,6 +416,41 @@ class OrderItem(models.Model):
     config_hash = models.CharField(max_length=64)
 
 
+class Payment(models.Model):
+    """Money received for an order : a Stripe Checkout session, or a payment recorded by hand
+    (bank transfer, cash) when the back-office marks the order as paid.
+    Refunds and Stripe fees are kept here too, so the back-office can show money in and out."""
+
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    order = models.ForeignKey(Order, related_name="payments", on_delete=models.PROTECT)
+
+    provider = models.CharField(max_length=20, choices=[("stripe", "Stripe"), ("manual", "Manual")], default="stripe")
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ("pending", "Pending"),  # customer sent to the Stripe page
+            ("paid", "Paid"),
+            ("failed", "Failed"),
+            ("expired", "Expired"),  # Stripe page left without paying
+            ("refunded", "Refunded"),
+            ("partially_refunded", "Partially refunded"),
+        ],
+        default="pending",
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, default="eur")
+    fee = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)  # Stripe fee, known once paid
+    refunded_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    stripe_session_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    stripe_payment_intent_id = models.CharField(max_length=255, blank=True, default="", db_index=True)
+    livemode = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    refunded_at = models.DateTimeField(null=True, blank=True)
+
+
 # this is use for Rule Engine and put relation between partModelOption on productCOmponentChoice
 # this is link with ConfigurationCondition and ConfigurationResult and participate for the rule engine
 

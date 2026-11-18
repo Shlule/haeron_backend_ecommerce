@@ -63,3 +63,25 @@ docker compose -f compose.dev.yaml up -d
 Tests : `.\local.ps1 pytest` (la base de test est créée sur le Postgres local).
 Repartir de zéro : `docker compose -f compose.dev.yaml down -v`, puis `migrate` et `seed_db`.
 Si Windows refuse le script : `powershell -ExecutionPolicy Bypass -File .\local.ps1 migrate`.
+
+## Paiement Stripe
+
+Le client paie sur la page Stripe (Stripe Checkout) : le backend la crée (`payOrder`), Stripe ramène le client sur
+`SHOP_URL/commande/<id>`, et la commande passe à « Payée » quand Stripe le confirme.
+Deux chemins mènent à « Payée », sans risque de doublon :
+- au retour du client, le backend relit la session chez Stripe (`confirmOrderPayment`) : suffit pour tester en local ;
+- le webhook `/api/payments/stripe/webhook/` : indispensable en production, si le client ferme l'onglet avant le retour.
+  Il reçoit aussi les remboursements (`charge.refunded`) et les pages abandonnées.
+
+Variables du `.env` : `STRIPE_SECRET_KEY` (`sk_test_...` en test), `STRIPE_WEBHOOK_SECRET` (`whsec_...`),
+`SHOP_URL` (adresse de la boutique, `http://localhost:3000` par défaut).
+Carte de test : `4242 4242 4242 4242`, une date future, n'importe quel code.
+
+Webhook en local, avec la CLI Stripe :
+```
+stripe listen --forward-to localhost:8000/api/payments/stripe/webhook/
+```
+Elle affiche un `whsec_...` à mettre dans `STRIPE_WEBHOOK_SECRET`. En production, créer le webhook dans le tableau
+de bord Stripe (Développeurs > Webhooks) avec les événements `checkout.session.completed`,
+`checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired`
+et `charge.refunded`.

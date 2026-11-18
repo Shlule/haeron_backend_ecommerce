@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from strawberry.scalars import JSON
 
 from ..checkout.checkout_dto import CustomerDTO
+from ..payments.payment_service import PaymentService
 from .storefront_input import AddToCartInput, PlaceOrderInput, UpdateCartItemInput
 from .storefront_service import StorefrontService
 
@@ -88,5 +89,22 @@ class StorefrontMutation:
         try:
             order = StorefrontService.checkout(input.idempotency_key, customer, user=_user(info), cart_key=input.cart_key)
         except (ValidationError, ValueError) as error:
+            raise Exception(_error_message(error)) from error
+        return StorefrontService.serialize_order(order)
+
+    @strawberry.mutation
+    def pay_order(self, order_id: UUID) -> str:
+        """Url of the Stripe page where the customer pays the order."""
+        try:
+            return PaymentService.start_checkout(order_id)
+        except ValidationError as error:
+            raise Exception(_error_message(error)) from error
+
+    @strawberry.mutation
+    def confirm_order_payment(self, order_id: UUID, session_id: str) -> JSON:
+        """Customer back from Stripe : the payment is checked with Stripe, then the order is returned."""
+        try:
+            order = PaymentService.confirm_checkout(order_id, session_id)
+        except ValidationError as error:
             raise Exception(_error_message(error)) from error
         return StorefrontService.serialize_order(order)
