@@ -367,7 +367,18 @@ class CartItem(models.Model):
 
 class Order(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, unique=True)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    # null for a guest order : the customer is known by the contact and address below
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT)
+
+    # contact and delivery address, copied at checkout so the order keeps them even if the account changes
+    email = models.EmailField(blank=True, default="")
+    first_name = models.CharField(max_length=100, blank=True, default="")
+    last_name = models.CharField(max_length=100, blank=True, default="")
+    phone = models.CharField(max_length=30, blank=True, default="")
+    address = models.CharField(max_length=255, blank=True, default="")
+    postal_code = models.CharField(max_length=20, blank=True, default="")
+    city = models.CharField(max_length=100, blank=True, default="")
+    country = models.CharField(max_length=2, blank=True, default="FR")
 
     # this key is provided by the front end th goal is to avoid genreating multiple order if
     # user emit multiple request because low frequency network

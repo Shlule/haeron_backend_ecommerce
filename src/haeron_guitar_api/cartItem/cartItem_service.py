@@ -46,21 +46,56 @@ class CartItemService:
         if dto.quantity <= 0:
             raise ValidationError("Quantity must be greater than 0")
 
-        product = (
+        product = CartItemService._product(dto.product_id)
+        cart = CartService.get_or_create_cart(CreateCartDTO(user=user, session_key=session_key))
+        snapshot, total_price, config_hash = CartItemService._resolve(product, dto.configuration)
+
+        return CartItemFactory.get_or_create(
+            cart=cart,
+            product=product,
+            config_hash=config_hash,
+            snapshot=snapshot,
+            total_price=total_price,
+            quantity=dto.quantity,
+        )
+
+    @staticmethod
+    @transaction.atomic
+    def reconfigure_item(item: CartItem, configuration) -> CartItem:
+        """Replaces the configuration of a cart line (checked and priced again).
+        If the cart already holds the same configuration, both lines are merged."""
+        snapshot, total_price, config_hash = CartItemService._resolve(item.product, configuration)
+        same = CartItem.objects.filter(cart=item.cart, config_hash=config_hash).exclude(pk=item.pk).first()
+        if same:
+            same.quantity += item.quantity
+            same.save()
+            item.delete()
+            return same
+        item.config_snapshot = snapshot
+        item.config_hash = config_hash
+        item.unit_price = total_price
+        item.save()
+        return item
+
+    @staticmethod
+    def _product(product_id):
+        return (
             Product.objects.select_related("product_type", "product_schema")
             .prefetch_related("product_schema__product_components")
-            .get(pk=dto.product_id)
+            .get(pk=product_id)
         )
-        product_type_code = product.product_type.code
-        cart = CartService.get_or_create_cart(CreateCartDTO(user=user, session_key=session_key))
+
+    @staticmethod
+    def _resolve(product, configuration):
+        """Checks a configuration against the product rules and prices it : (snapshot, unit price, hash)."""
         total_price = product.price
         snapshot = {}
-        if dto.configuration:
-            handler = ProductTypeHandlerRegistry.get_handler(product_type_code)
+        if configuration:
+            handler = ProductTypeHandlerRegistry.get_handler(product.product_type.code)
             if not handler:
                 raise ValueError("No handler exist for this product type")
 
-            snapshot, total_price = handler.resolve(product, dto.configuration)
+            snapshot, total_price = handler.resolve(product, configuration)
 
         # a product without schema is not configurable : no rule to check
         engine = RuleEngine()
@@ -72,16 +107,10 @@ class CartItemService:
             if rules_violation:
                 raise ValidationError(rules_violation)
 
-        config_hash = ConfigHashService.generate(snapshot)
-
-        return CartItemFactory.get_or_create(
-            cart=cart,
-            product=product,
-            config_hash=config_hash,
-            snapshot={"options": snapshot},
-            total_price=total_price,
-            quantity=dto.quantity,
-        )
+        # the product is part of the hash : two products without configuration are two different lines
+        config_hash = ConfigHashService.generate({"product": str(product.pk), "options": snapshot})
+        # the configuration as sent is kept, so the line can be opened again in the configurator
+        return {"options": snapshot, "configuration": configuration or {}}, total_price, config_hash
 
     @staticmethod
     @transaction.atomic

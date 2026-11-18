@@ -5,7 +5,8 @@ import strawberry
 from django.core.exceptions import ValidationError
 from strawberry.scalars import JSON
 
-from .storefront_input import AddToCartInput
+from ..checkout.checkout_dto import CustomerDTO
+from .storefront_input import AddToCartInput, PlaceOrderInput, UpdateCartItemInput
 from .storefront_service import StorefrontService
 
 
@@ -34,6 +35,11 @@ class StorefrontQuery:
         cart = StorefrontService.find_cart(user=_user(info), cart_key=cart_key)
         return StorefrontService.serialize(cart, cart_key if cart else None)
 
+    @strawberry.field
+    def shop_order(self, order_id: UUID) -> Optional[JSON]:
+        order = StorefrontService.find_order(order_id)
+        return StorefrontService.serialize_order(order) if order else None
+
 
 @strawberry.type
 class StorefrontMutation:
@@ -56,3 +62,31 @@ class StorefrontMutation:
         except ValidationError as error:
             raise Exception(_error_message(error)) from error
         return StorefrontService.serialize(cart, cart_key)
+
+    @strawberry.mutation
+    def update_cart_item(self, info: strawberry.Info, input: UpdateCartItemInput) -> JSON:
+        try:
+            cart = StorefrontService.update(
+                input.item_id, input.quantity, input.configuration, user=_user(info), cart_key=input.cart_key
+            )
+        except (ValidationError, ValueError) as error:
+            raise Exception(_error_message(error)) from error
+        return StorefrontService.serialize(cart, input.cart_key)
+
+    @strawberry.mutation
+    def place_order(self, info: strawberry.Info, input: PlaceOrderInput) -> JSON:
+        customer = CustomerDTO(
+            email=input.email,
+            first_name=input.first_name,
+            last_name=input.last_name,
+            address=input.address,
+            postal_code=input.postal_code,
+            city=input.city,
+            country=input.country,
+            phone=input.phone,
+        )
+        try:
+            order = StorefrontService.checkout(input.idempotency_key, customer, user=_user(info), cart_key=input.cart_key)
+        except (ValidationError, ValueError) as error:
+            raise Exception(_error_message(error)) from error
+        return StorefrontService.serialize_order(order)
