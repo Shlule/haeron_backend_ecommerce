@@ -30,6 +30,7 @@ from ..order.order_service import OrderService
 from ..production.part_model_builder import PartModelBuilder
 from ..production.piece_product_builder import PieceProductBuilder
 from ..production.product_catalogue import ProductCatalogue
+from ..production.product_editor import ProductEditor
 from ..production.production_service import EVENT_TYPES, ProductionService
 from .registry import COMMON_EXCLUDE, REGISTERED, RESOURCES
 
@@ -695,6 +696,64 @@ def _set_product_visible(product_id: uuid.UUID, visible: bool) -> JSON:
 _query_fields["catalogue_products"] = strawberry.field(resolver=_catalogue_products)
 _add_mutation("create_shop_product", _create_product)
 _add_mutation("set_product_visible", _set_product_visible)
+@strawberry.input
+class BoProductInput:
+    name: str
+    price: decimal.Decimal = decimal.Decimal(0)
+    instrument_model_id: Optional[uuid.UUID] = None
+    image: str = ""
+    model_3d: str = ""
+    visible: bool = False
+
+
+@strawberry.input
+class BoProductComponentInput:
+    key: str = ""
+    part_model_ids: list[uuid.UUID] = strawberry.field(default_factory=list)
+    choice_product_ids: list[uuid.UUID] = strawberry.field(default_factory=list)
+    fixed_product_id: Optional[uuid.UUID] = None
+
+
+def _product_editor(product_id: uuid.UUID) -> JSON:
+    return _production(lambda: ProductEditor.editor(product_id))
+
+
+def _product_editor_catalog() -> JSON:
+    return ProductEditor.catalog()
+
+
+def _create_configurable_product(data: BoProductInput) -> JSON:
+    payload = strawberry.asdict(data)
+    return _production(lambda: ProductEditor.create_configurable(payload))
+
+
+def _update_product(product_id: uuid.UUID, data: BoProductInput) -> JSON:
+    payload = strawberry.asdict(data)
+    return _production(lambda: ProductEditor.update_product(product_id, payload))
+
+
+def _add_product_component(
+    product_id: uuid.UUID, key: str, source_type: str, fixed_product_id: Optional[uuid.UUID] = None
+) -> JSON:
+    return _production(lambda: ProductEditor.add_component(product_id, key, source_type, fixed_product_id))
+
+
+def _update_product_component(product_id: uuid.UUID, component_id: uuid.UUID, data: BoProductComponentInput) -> JSON:
+    payload = strawberry.asdict(data)
+    return _production(lambda: ProductEditor.update_component(product_id, component_id, payload))
+
+
+def _remove_product_component(product_id: uuid.UUID, component_id: uuid.UUID) -> JSON:
+    return _production(lambda: ProductEditor.remove_component(product_id, component_id))
+
+
+_query_fields["product_editor"] = strawberry.field(resolver=_product_editor)
+_query_fields["product_editor_catalog"] = strawberry.field(resolver=_product_editor_catalog)
+_add_mutation("create_configurable_product", _create_configurable_product)
+_add_mutation("save_product", _update_product)
+_add_mutation("add_template_step", _add_product_component)
+_add_mutation("save_template_step", _update_product_component)
+_add_mutation("remove_template_step", _remove_product_component)
 _mutation_fields["add_history_event"] = strawberry.mutation(resolver=_add_history_event)
 _mutation_fields["delete_history_event"] = strawberry.mutation(resolver=_delete_history_event)
 _mutation_fields["set_production_status"] = strawberry.mutation(resolver=_set_production_status)
