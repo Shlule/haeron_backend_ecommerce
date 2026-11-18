@@ -300,6 +300,9 @@ class Product(models.Model):
     # shop display : picture of the product card and 3D model of the configurator, paths served by the front (ex: /models/starlight.glb)
     image = models.CharField(max_length=255, blank=True, default="")
     model_3d = models.CharField(max_length=255, blank=True, default="")
+    # hidden : not listed in the shop and cannot be added to a cart, but kept with its orders and carts.
+    # Its configurator page still opens, to try a product before showing it.
+    is_visible = models.BooleanField(default=True, db_index=True)
 
 
 class ProductType(models.Model):

@@ -28,6 +28,8 @@ from authUser.permission.permission import HasRole, IsAuthenticated
 from ..finance.finance_service import FinanceService
 from ..order.order_service import OrderService
 from ..production.part_model_builder import PartModelBuilder
+from ..production.piece_product_builder import PieceProductBuilder
+from ..production.product_catalogue import ProductCatalogue
 from ..production.production_service import EVENT_TYPES, ProductionService
 from .registry import COMMON_EXCLUDE, REGISTERED, RESOURCES
 
@@ -635,6 +637,64 @@ _query_fields["part_model_form"] = strawberry.field(resolver=_part_model_form)
 _mutation_fields["create_part_model_with_options"] = strawberry.mutation(
     resolver=_create_part_model_with_options, permission_classes=_build_permissions
 )
+@strawberry.input
+class BoPieceProductInput:
+    component_id: uuid.UUID
+    name: str
+    price: decimal.Decimal = decimal.Decimal(0)
+    image: str = ""
+    model_3d: str = ""
+    visible: bool = True
+
+
+@strawberry.input
+class BoPieceProductsInput:
+    instrument_model_id: uuid.UUID
+    pieces: list[BoPieceProductInput]
+
+
+def _piece_product_form() -> JSON:
+    return PieceProductBuilder.form_data()
+
+
+def _create_piece_products(data: BoPieceProductsInput) -> JSON:
+    payload = strawberry.asdict(data)
+    return _production(lambda: PieceProductBuilder.create(payload))
+
+
+_query_fields["piece_product_form"] = strawberry.field(resolver=_piece_product_form)
+_mutation_fields["create_piece_products"] = strawberry.mutation(resolver=_create_piece_products)
+def _add_mutation(name, resolver):
+    """A business mutation next to the generic ones (create_product, update_product...) : never under the same name."""
+    if name in _mutation_fields:
+        raise RuntimeError(f"Back-office mutation {name} already exists")
+    _mutation_fields[name] = strawberry.mutation(resolver=resolver)
+
+
+@strawberry.input
+class BoNewProductInput:
+    name: str
+    price: decimal.Decimal = decimal.Decimal(0)
+    image: str = ""
+    visible: bool = True
+
+
+def _catalogue_products() -> JSON:
+    return ProductCatalogue.products()
+
+
+def _create_product(data: BoNewProductInput) -> JSON:
+    payload = strawberry.asdict(data)
+    return _production(lambda: ProductCatalogue.create(payload))
+
+
+def _set_product_visible(product_id: uuid.UUID, visible: bool) -> JSON:
+    return _production(lambda: ProductCatalogue.set_visible(product_id, visible))
+
+
+_query_fields["catalogue_products"] = strawberry.field(resolver=_catalogue_products)
+_add_mutation("create_shop_product", _create_product)
+_add_mutation("set_product_visible", _set_product_visible)
 _mutation_fields["add_history_event"] = strawberry.mutation(resolver=_add_history_event)
 _mutation_fields["delete_history_event"] = strawberry.mutation(resolver=_delete_history_event)
 _mutation_fields["set_production_status"] = strawberry.mutation(resolver=_set_production_status)

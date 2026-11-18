@@ -9,6 +9,7 @@ from ..checkout.checkout_service import CheckoutService
 from django.db.models import Prefetch
 
 from ..models import Cart, CartItem, Order, OrderItem, Product
+from ..production.product_catalogue import kind_of, with_kind
 
 
 class StorefrontService:
@@ -16,7 +17,7 @@ class StorefrontService:
 
     @staticmethod
     def products():
-        products = Product.objects.select_related("product_type").order_by("name")
+        products = with_kind(Product.objects.select_related("product_type").filter(is_visible=True)).order_by("name")
         return [
             {
                 "id": str(product.uuid),
@@ -25,6 +26,8 @@ class StorefrontService:
                 "type": product.product_type.code,
                 # a product with a schema goes through the configurator, the others are added to the cart as they are
                 "configurable": product.product_schema_id is not None,
+                # one piece of an instrument sold alone (a single component to configure)
+                "piece": kind_of(product) == "piece",
                 "image": product.image,
                 "model3d": product.model_3d,
             }

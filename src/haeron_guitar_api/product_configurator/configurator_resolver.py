@@ -42,6 +42,8 @@ def build_configurator_template(product):
             "type": product.product_type.code,
             "image": product.image,
             "model3d": product.model_3d,
+            # a hidden product can be tried in the configurator but not added to a cart
+            "visible": product.is_visible,
         },
         "components": configuration.components,
         "rules": [engine.serialize_rule_json(rule) for rule in rules],
@@ -81,7 +83,7 @@ class ConfiguratorQuery:
     @strawberry.field
     def configurator_products(self) -> JSON:
         products = Product.objects.select_related("product_type").filter(
-            product_type__code="bundle_dynamique", product_schema__isnull=False
+            product_type__code="bundle_dynamique", product_schema__isnull=False, is_visible=True
         )
         return [
             {"id": str(p.uuid), "name": p.name, "price": float(p.price), "type": p.product_type.code}

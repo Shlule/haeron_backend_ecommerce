@@ -48,6 +48,8 @@ class CartItemService:
             raise ValidationError("Quantity must be greater than 0")
 
         product = CartItemService._product(dto.product_id)
+        if not product.is_visible:
+            raise ValidationError("Ce produit n'est plus en vente.")
         cart = CartService.get_or_create_cart(CreateCartDTO(user=user, session_key=session_key))
         snapshot, total_price, config_hash = CartItemService._resolve(product, dto.configuration)
 
