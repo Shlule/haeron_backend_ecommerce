@@ -44,7 +44,6 @@ class EngravingTemplateMutation:
 
     @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin")])
     def create_engraving_template(self, input: EngravingTemplateCreateInput) -> EngravingTemplateGQLType:
-        print("je suis dnas la fonction")
         template = EngravingTemplateService.create(
             name=input.name,
             mark_type=input.mark_type,
