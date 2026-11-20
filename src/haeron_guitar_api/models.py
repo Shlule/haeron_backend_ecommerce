@@ -415,6 +415,13 @@ class Order(models.Model):
     # blankable and nullable because we fill this fields with calculation of order itemPrice.
     total_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
 
+    # parcel : filled in the back-office when the order leaves the workshop (see order/shipping.py)
+    carrier = models.CharField(max_length=30, blank=True, default="")
+    tracking_number = models.CharField(max_length=100, blank=True, default="")
+    # tracking page given by hand, for a carrier missing from the list
+    tracking_url = models.URLField(max_length=500, blank=True, default="")
+    shipped_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
 

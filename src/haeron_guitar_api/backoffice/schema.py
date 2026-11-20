@@ -431,6 +431,13 @@ def _send_payment_link(order_id: uuid.UUID) -> JSON:
     return _production(lambda: PaymentService.send_payment_link(order_id))
 
 
+def _ship_order(
+    order_id: uuid.UUID, carrier: str, tracking_number: str = "", tracking_url: str = "", notify: bool = True
+) -> JSON:
+    """Parcel handed to the carrier : order shipped, tracking e-mail to the customer (unless notify is false)."""
+    return _production(lambda: OrderService.ship(order_id, carrier, tracking_number, tracking_url, notify))
+
+
 # money in and out (payments, refunds, Stripe fees) : managers only
 FINANCE_ROLES = ("superadmin", "admin")
 
@@ -881,6 +888,7 @@ _add_mutation("catalogue_delete_value", _catalogue_delete_value)
 _add_mutation("catalogue_link", _catalogue_link)
 _add_mutation("catalogue_unlink", _catalogue_unlink)
 _add_mutation("send_payment_link", _send_payment_link)
+_add_mutation("ship_order", _ship_order)
 _mutation_fields["add_history_event"] = strawberry.mutation(resolver=_add_history_event)
 _mutation_fields["delete_history_event"] = strawberry.mutation(resolver=_delete_history_event)
 _mutation_fields["set_production_status"] = strawberry.mutation(resolver=_set_production_status)

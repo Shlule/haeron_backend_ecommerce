@@ -9,6 +9,7 @@ from ..checkout.checkout_service import CheckoutService
 from django.db.models import Prefetch
 
 from ..models import Cart, CartItem, Order, OrderItem, Product
+from ..order.shipping import serialize_shipment
 from ..production.product_catalogue import kind_of, with_kind
 
 
@@ -115,6 +116,7 @@ class StorefrontService:
             "city": order.city,
             "country": order.country,
             "total": float(order.total_price or 0),
+            "shipment": serialize_shipment(order),
             "items": [
                 {
                     "name": item.product_name,

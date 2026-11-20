@@ -10,7 +10,9 @@ from django.utils.html import escape
 from django.db import transaction
 from django.utils import timezone
 
-from ..models import Order, Payment
+from ..models import Order, Payment, Product
+from ..order.item_summary import summarize
+from ..order.order_emails import OrderEmails
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +55,7 @@ class PaymentService:
             raise ValidationError("Cette commande n'a rien à payer.")
 
         order_id = str(order.uuid)
+        images = dict(Product.objects.filter(uuid__in={item.product_id for item in items}).values_list("uuid", "image"))
         session = stripe.checkout.Session.create(
             mode="payment",
             line_items=[
@@ -61,7 +64,7 @@ class PaymentService:
                     "price_data": {
                         "currency": "eur",
                         "unit_amount": _cents(item.unit_price),
-                        "product_data": {"name": item.product_name},
+                        "product_data": PaymentService._product_data(item, images.get(item.product_id)),
                     },
                 }
                 for item in items
@@ -82,6 +85,19 @@ class PaymentService:
             livemode=bool(_get(session, "livemode", False)),
         )
         return _get(session, "url")
+
+    @staticmethod
+    def _product_data(item, image):
+        """What the Stripe page shows for an item : its name, the choices made, and its picture."""
+        data = {"name": item.product_name}
+        description = " / ".join(summarize((item.config_snapshot or {}).get("options")))
+        if description:
+            data["description"] = description[:500]
+        # Stripe downloads the picture itself : only a public https address works (not localhost)
+        url = image if (image or "").startswith("https://") else f"{SHOP_URL}/{image.lstrip('/')}" if image else ""
+        if url.startswith("https://"):
+            data["images"] = [url]
+        return data
 
     @staticmethod
     def payment_link(order):
@@ -181,7 +197,9 @@ class PaymentService:
             payment.paid_at = timezone.now()
             payment.save()
             # a pending order becomes paid ; an order already in production keeps its status
-            Order.objects.filter(pk=payment.order_id, status="pending").update(status="paid")
+            if Order.objects.filter(pk=payment.order_id, status="pending").update(status="paid"):
+                # only on that change : the webhook and the customer return never send it twice
+                OrderEmails.after_commit(OrderEmails.confirmation, payment.order_id)
         PaymentService._store_fee(payment)
         return payment
 

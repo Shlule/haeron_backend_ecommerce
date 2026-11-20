@@ -1,8 +1,12 @@
 from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 from django.db.models import Prefetch, Q, Sum
+from django.utils import timezone
 
 from ..models import Order, OrderItem, PartModel, PartModelOption, Payment
 from ..payments.payment_service import PaymentService
+from .order_emails import OrderEmails
+from .shipping import CARRIERS, carrier_options, serialize_shipment
 
 STATUSES = dict(Order._meta.get_field("status").choices)
 
@@ -58,6 +62,8 @@ class OrderService:
             # not paid yet : the link to give the customer, and how many Stripe pages were opened without paying
             "paymentLink": PaymentService.payment_link(order) if order.status == "pending" else None,
             "unpaidAttempts": sum(1 for p in payments if p.provider == "stripe" and p.status in [*unpaid, "failed"]),
+            "shipment": serialize_shipment(order),
+            "carriers": carrier_options(),
             "items": [
                 {
                     "productId": str(item.product_id),
@@ -78,11 +84,44 @@ class OrderService:
         order = Order.objects.filter(uuid=order_uuid).first()
         if order is None:
             raise ValidationError("Commande introuvable.")
+        previous = order.status
         order.status = status
-        order.save(update_fields=["status"])
+        fields = ["status"]
+        if status == "shipped" and not order.shipped_at:
+            order.shipped_at = timezone.now()
+            fields.append("shipped_at")
+        order.save(update_fields=fields)
         if status == "paid":
             # paid outside Stripe (transfer, cash) : the money still shows in the finances
             PaymentService.record_manual(order)
+            if previous == "pending":
+                OrderEmails.after_commit(OrderEmails.confirmation, order.pk)
+        return OrderService.detail(order_uuid)
+
+    @staticmethod
+    def ship(order_uuid, carrier, tracking_number="", tracking_url="", notify=True):
+        """Parcel handed to the carrier : the order becomes "shipped" and the customer gets the tracking link.
+        Called again to correct the number, with notify to send the e-mail again."""
+        order = Order.objects.filter(uuid=order_uuid).first()
+        if order is None:
+            raise ValidationError("Commande introuvable.")
+        if order.status in ("pending", "cancelled"):
+            raise ValidationError("Cette commande n'est pas payée : elle ne peut pas être expédiée.")
+        if carrier not in CARRIERS:
+            raise ValidationError(f"Transporteur inconnu : {carrier}")
+        tracking_number, tracking_url = tracking_number.strip(), tracking_url.strip()
+        if tracking_url:
+            try:
+                URLValidator(schemes=["http", "https"])(tracking_url)
+            except ValidationError as error:
+                raise ValidationError("Le lien de suivi doit être une adresse web (https://...).") from error
+        order.carrier, order.tracking_number, order.tracking_url = carrier, tracking_number, tracking_url
+        order.shipped_at = order.shipped_at or timezone.now()
+        if order.status in ("paid", "processing"):
+            order.status = "shipped"
+        order.save(update_fields=["carrier", "tracking_number", "tracking_url", "shipped_at", "status"])
+        if notify:
+            OrderEmails.after_commit(OrderEmails.shipped, order.pk)
         return OrderService.detail(order_uuid)
 
     @staticmethod
