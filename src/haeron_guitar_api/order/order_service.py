@@ -1,10 +1,13 @@
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
+from django.db import transaction
 from django.db.models import Prefetch, Q, Sum
 from django.utils import timezone
 
-from ..models import Order, OrderItem, PartModel, PartModelOption, Payment
+from ..models import Instrument, Order, OrderItem, Part, PartModel, PartModelOption, Payment
 from ..payments.payment_service import PaymentService
+from ..production import order_lines
+from ..production.production_service import ProductionService
 from .order_emails import OrderEmails
 from .shipping import CARRIERS, carrier_options, serialize_shipment
 
@@ -40,6 +43,12 @@ class OrderService:
             Order.objects.prefetch_related(
                 Prefetch("order_items", queryset=OrderItem.objects.order_by("pk")),
                 Prefetch("payments", queryset=Payment.objects.order_by("created_at")),
+                # what the workshop delivers for each line
+                Prefetch(
+                    "order_items__instruments",
+                    queryset=Instrument.objects.select_related("master_part", "instrument_model").order_by("created_at"),
+                ),
+                Prefetch("order_items__parts", queryset=Part.objects.select_related("part_model").order_by("created_at")),
             )
             .filter(uuid=order_uuid)
             .first()
@@ -50,6 +59,7 @@ class OrderService:
         payments = list(order.payments.all())
         unpaid = ["pending", "expired"]  # Stripe pages opened without paying
         catalog = OrderService._catalog(items)
+        line_kinds = order_lines.kinds(items)
         return {
             **OrderService._summary(order, item_count=sum(item.quantity for item in items)),
             "phone": order.phone,
@@ -72,12 +82,14 @@ class OrderService:
                     "unitPrice": float(item.unit_price),
                     "total": float(item.unit_price * item.quantity),
                     "components": OrderService._components((item.config_snapshot or {}).get("options"), catalog),
+                    "production": OrderService._production(item, line_kinds[item.pk]),
                 }
                 for item in items
             ],
         }
 
     @staticmethod
+    @transaction.atomic
     def set_status(order_uuid, status):
         if status not in STATUSES:
             raise ValidationError(f"Statut inconnu : {status}")
@@ -85,6 +97,9 @@ class OrderService:
         if order is None:
             raise ValidationError("Commande introuvable.")
         previous = order.status
+        if status == "cancelled" and previous != "cancelled":
+            # what was made or kept for the order goes back to stock
+            ProductionService.release_order(order)
         order.status = status
         fields = ["status"]
         if status == "shipped" and not order.shipped_at:
@@ -123,6 +138,20 @@ class OrderService:
         if notify:
             OrderEmails.after_commit(OrderEmails.shipped, order.pk)
         return OrderService.detail(order_uuid)
+
+    @staticmethod
+    def _production(item, kind):
+        """What the line needs from the workshop (kind : instrument, part or None) and what is linked to it."""
+        made = [
+            {"kind": "instrument", "id": str(i.uuid), "serialNumber": i.master_part.serial_number,
+             "name": i.instrument_model.name, "status": i.status}
+            for i in item.instruments.all()
+        ] + [
+            {"kind": "part", "id": str(p.uuid), "serialNumber": p.serial_number, "name": p.part_model.name,
+             "status": p.status}
+            for p in item.parts.all()
+        ]
+        return {"kind": kind, "expected": item.quantity if kind else 0, "made": made}
 
     @staticmethod
     def _summary(order, item_count=None):

@@ -36,12 +36,12 @@ class SerialCounterQuery:
 @strawberry.type
 class SerialCounterMutation:
     @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager","rnd")])
-    def get_or_create_today_serial(self, factory_id: str) -> SerialCounterGQLType:
-        return SerialCounterService.get_or_create_today(factory_id=factory_id)
+    def get_or_create_today_serial(self, factory_id: UUID, part_model_id: UUID) -> SerialCounterGQLType:
+        return SerialCounterService.get_or_create_today(factory_id=factory_id, part_model_id=part_model_id)
 
     @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager","rnd")])
-    def serial_counter_next(self, factory_id: str) -> int:
-        return SerialCounterService.next(factory_id=factory_id)
+    def serial_counter_next(self, factory_id: UUID, part_model_id: UUID) -> int:
+        return SerialCounterService.next(factory_id=factory_id, part_model_id=part_model_id)
 
     @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager","rnd")])
     def delete_serials(self, serial_ids: List[UUID]) -> int:

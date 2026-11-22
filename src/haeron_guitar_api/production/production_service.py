@@ -11,7 +11,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, Exists, F, OuterRef, Prefetch, Q
 from django.utils import timezone
 
 from ..models import (
@@ -21,6 +21,7 @@ from ..models import (
     InstrumentModel,
     InstrumentType,
     Order,
+    OrderItem,
     Part,
     PartBatch,
     PartHistory,
@@ -28,10 +29,10 @@ from ..models import (
     PartModelOption,
     PartNFCIdentity,
     SALE_STATUSES,
-    SerialCounter,
 )
 from ..part.part_service import PartService
 from ..partBatch.partBatch_service import PartBatchService
+from . import order_lines
 
 EVENT_TYPES = [
     ("fabrication", "Fabrication"),
@@ -48,6 +49,11 @@ EVENT_LABELS = dict(EVENT_TYPES)
 STATUS_LABELS = dict(SALE_STATUSES)
 # title of the history event written when the status changes
 STATUS_EVENTS = {"sold": "Vendu", "reserved": "Réservé", "in_stock": "Remis en stock"}
+
+
+def _order_note(item):
+    """History note of a sale made for an order line."""
+    return f"Commande {order_lines.reference(item.order)} · {item.product_name}" if item else ""
 
 
 def _text(value):
@@ -96,12 +102,32 @@ class ProductionService:
         part_models = PartModel.objects.select_related("part_type").exclude(status="discontinued").order_by(
             "part_type__name", "name"
         )
-        orders = Order.objects.exclude(status="cancelled").select_related("user").prefetch_related("order_items").order_by(
-            "-created_at"
-        )[:100]
-        free_parts = Part.objects.filter(instrument__isnull=True, instrument_masterpart__isnull=True).select_related(
-            "part_model"
+        # only the orders that still wait for something from the workshop : the list stays short as orders are served
+        unserved_line = (
+            OrderItem.objects.filter(order=OuterRef("pk"))
+            .annotate(linked=Count("instruments", distinct=True) + Count("parts", distinct=True))
+            .filter(linked__lt=F("quantity"))
         )
+        orders = list(
+            Order.objects.exclude(status__in=["cancelled", "completed"])
+            .filter(Exists(unserved_line))
+            .select_related("user")
+            .prefetch_related("order_items__instruments", "order_items__parts")
+            .order_by("-created_at")[:100]
+        )
+        line_kinds = order_lines.kinds([item for order in orders for item in order.order_items.all()])
+
+        def waits(order):  # a line sold as it is (an accessory) waits for nothing
+            return any(
+                line_kinds[item.pk] and len(item.instruments.all()) + len(item.parts.all()) < item.quantity
+                for item in order.order_items.all()
+            )
+
+        orders = [order for order in orders if waits(order)]
+        # parts that can go on an instrument : not mounted, not sold alone with an order
+        free_parts = Part.objects.filter(
+            instrument__isnull=True, instrument_masterpart__isnull=True, order_item__isnull=True
+        ).select_related("part_model")
         return {
             "eventTypes": [{"value": value, "label": label} for value, label in EVENT_TYPES],
             "statuses": [{"value": value, "label": label} for value, label in SALE_STATUSES],
@@ -143,7 +169,15 @@ class ProductionService:
                     # owner proposed for the instrument : only a customer account can own it
                     "accountEmail": order.user.email if order.user else None,
                     "items": [
-                        {"index": index, "name": item.product_name, "parts": ProductionService._parts_of(item.config_snapshot)}
+                        {
+                            "index": index,
+                            "name": item.product_name,
+                            "parts": ProductionService._parts_of(item.config_snapshot),
+                            "quantity": item.quantity,
+                            # what the line needs (instrument, part or nothing) and how many are already linked
+                            "kind": line_kinds[item.pk],
+                            "linked": len(item.instruments.all()) + len(item.parts.all()),
+                        }
                         for index, item in enumerate(sorted(order.order_items.all(), key=lambda i: i.pk))
                     ],
                 }
@@ -236,9 +270,7 @@ class ProductionService:
         if batch is None:
             raise ValidationError(f"Aucun lot actif pour {part_model.name} : crée d'abord un lot.")
         snapshot = ProductionService._snapshot(part_model, option_ids, option_prices)
-        # the counter row is locked until the end of the transaction : two parts never get the same number
-        SerialCounter.objects.get_or_create(factory=factory, year=timezone.now().year)
-        SerialCounter.objects.select_for_update().get(factory=factory, year=timezone.now().year)
+        # reserves the next number of this part model : the counter stays locked until the end of the transaction
         serial_number = PartService.build_serial_number(factory, part_model, instrument_type, batch)
         part = Part.objects.create(
             serial_number=serial_number,
@@ -251,9 +283,6 @@ class ProductionService:
             created_by=user,
             updated_by=user,
         )
-        from ..serial_counter.serial_counter_service import SerialCounterService
-
-        SerialCounterService.next(factory.uuid)
         PartHistory.objects.create(
             part=part,
             event_type="fabrication",
@@ -272,6 +301,10 @@ class ProductionService:
         instrument_type = InstrumentType.objects.filter(pk=data.get("instrument_type_id")).first()
         if factory is None or instrument_type is None:
             raise ValidationError("Choisis l'atelier et le type d'instrument.")
+        item = None
+        if data.get("order_id"):
+            item = order_lines.item_of(data["order_id"], data.get("order_item_index"))
+            order_lines.check_room(item, Part)
         part = ProductionService._make_part(
             data.get("part_model_id"),
             factory,
@@ -283,10 +316,14 @@ class ProductionService:
             user,
             ProductionService._prices(data.get("option_prices")),
         )
-        status = data.get("status") or "in_stock"
+        if item is not None:
+            part.order_item = item
+            part.save(update_fields=["order_item"])
+        # a piece made for an order is already sold
+        status = data.get("status") or ("sold" if item else "in_stock")
         ProductionService._check_status(status)
         if status != "in_stock":
-            ProductionService._apply_status(part, status, "", user)
+            ProductionService._apply_status(part, status, _order_note(item), user)
         return ProductionService.part_sheet(part.uuid)
 
     @staticmethod
@@ -304,8 +341,12 @@ class ProductionService:
         if not 0 <= master_index < len(lines):
             raise ValidationError("Choisis la pièce maîtresse.")
         owner = _owner(data.get("owner_email"))
+        item = None
+        if data.get("order_id"):
+            item = order_lines.item_of(data["order_id"], data.get("order_item_index"))
+            order_lines.check_room(item, Instrument)
         # an instrument made for an order is already sold
-        status = data.get("status") or ("sold" if data.get("order_id") else "in_stock")
+        status = data.get("status") or ("sold" if item else "in_stock")
         ProductionService._check_status(status)
 
         existing_ids = [line["existing_part_id"] for line in lines if line.get("existing_part_id")]
@@ -324,6 +365,8 @@ class ProductionService:
                     raise ValidationError("Une des pièces choisies n'existe plus.")
                 if part.instrument_id or Instrument.objects.filter(master_part=part).exists():
                     raise ValidationError(f"La pièce {part.serial_number} est déjà montée sur un instrument.")
+                if part.order_item_id:
+                    raise ValidationError(f"La pièce {part.serial_number} est vendue seule avec une commande.")
                 if is_master and not part.is_master:
                     part.is_master = True
                     part.save(update_fields=["is_master"])
@@ -347,7 +390,8 @@ class ProductionService:
             master_part=master,
             owner=owner,
             description=_text(data.get("description")),
-            configuration=ProductionService._configuration(data, parts),
+            configuration=ProductionService._configuration(item, parts),
+            order_item=item,
             created_by=user,
             updated_by=user,
         )
@@ -375,26 +419,104 @@ class ProductionService:
             ]
         )
         if status != "in_stock":
-            ProductionService._apply_status(instrument, status, "", user)
+            ProductionService._apply_status(instrument, status, _order_note(item), user)
         return ProductionService.instrument_sheet(instrument.uuid)
 
     @staticmethod
-    def _configuration(data, parts):
-        order_id, item_index = data.get("order_id"), data.get("order_item_index")
-        if order_id:
-            order = Order.objects.filter(uuid=order_id).prefetch_related("order_items").first()
-            items = sorted(order.order_items.all(), key=lambda i: i.pk) if order else []
-            if item_index is None or not 0 <= item_index < len(items):
-                raise ValidationError("Ligne de commande introuvable.")
-            item = items[item_index]
+    def _configuration(item, parts):
+        if item is not None:
             return {
                 "source": "order",
-                "orderId": str(order.uuid),
-                "reference": str(order.uuid)[:8].upper(),
+                "orderId": str(item.order.uuid),
+                "reference": order_lines.reference(item.order),
                 "product": item.product_name,
                 "snapshot": item.config_snapshot,
             }
         return {"source": "backoffice", "parts": [part.production_snapshot for part in parts]}
+
+    # --- order lines ---
+
+    @staticmethod
+    @transaction.atomic
+    def link_order(target, target_id, order_id=None, order_item_index=None, user=None):
+        """Gives an instrument, or a piece sold alone, to an order line (made for it or taken from stock) :
+        it is sold and belongs to the customer's account. Without an order, takes it back : it returns to stock."""
+        user = _user(user)
+        model = {"instrument": Instrument, "part": Part}.get(target)
+        if model is None:
+            raise ValidationError("Attribue un instrument ou une pièce.")
+        rows = model.objects.select_for_update(of=("self",)).select_related("order_item__order__user")
+        obj = rows.filter(pk=target_id).first()
+        if obj is None:
+            raise ValidationError("Instrument introuvable." if target == "instrument" else "Pièce introuvable.")
+        if target == "part" and obj.instrument_id:
+            raise ValidationError("Cette pièce est montée sur un instrument : c'est l'instrument qui va à la commande.")
+        if order_id:
+            item = order_lines.item_of(order_id, order_item_index)
+            if obj.order_item_id != item.pk:
+                order_lines.check_room(item, model, exclude_pk=obj.pk)
+                if obj.order_item_id:
+                    ProductionService._unlink(obj, "in_stock", user)
+                ProductionService._link(obj, item, user)
+        elif obj.order_item_id:
+            ProductionService._unlink(obj, "in_stock", user)
+        if target == "instrument":
+            return ProductionService.instrument_sheet(obj.uuid)
+        return ProductionService.part_sheet(obj.uuid)
+
+    @staticmethod
+    def release_order(order, user=None):
+        """Cancelled order : what was made or kept for it goes back to stock (and to no customer)."""
+        user = _user(user)
+        for model in (Instrument, Part):
+            for obj in model.objects.select_for_update(of=("self",)).select_related("order_item__order__user").filter(
+                order_item__order=order
+            ):
+                ProductionService._unlink(obj, "in_stock", user, cancelled=True)
+
+    @staticmethod
+    def _link(obj, item, user):
+        order = item.order
+        obj.order_item = item
+        fields = ["order_item"]
+        # the customer's account owns it, unless an owner was already chosen
+        if obj.owner_id is None and order.user_id:
+            obj.owner = order.user
+            fields.append("owner")
+            if isinstance(obj, Instrument):
+                Part.objects.filter(instrument=obj).update(owner=order.user)
+        obj.save(update_fields=fields)
+        note = _order_note(item)
+        if obj.status != "sold":
+            ProductionService._apply_status(obj, "sold", note, user)
+        else:
+            ProductionService._history(obj, "vente", "Attribué à une commande", note, user)
+
+    @staticmethod
+    def _unlink(obj, status, user, cancelled=False):
+        order = obj.order_item.order
+        reference = order_lines.reference(order)
+        obj.order_item = None
+        fields = ["order_item"]
+        if order.user_id and obj.owner_id == order.user_id:
+            obj.owner = None
+            fields.append("owner")
+            if isinstance(obj, Instrument):
+                Part.objects.filter(instrument=obj).update(owner=None)
+        obj.save(update_fields=fields)
+        note = f"Commande {reference} annulée." if cancelled else f"Retiré de la commande {reference}."
+        if obj.status != status:
+            ProductionService._apply_status(obj, status, note, user)
+        else:
+            ProductionService._history(obj, "vente", "Retiré d'une commande", note, user)
+
+    @staticmethod
+    def _history(obj, event_type, title, description, user):
+        event = {"event_type": event_type, "title": title, "description": description, "created_by": user, "updated_by": user}
+        if isinstance(obj, Instrument):
+            InstrumentHistory.objects.create(instrument=obj, **event)
+        else:
+            PartHistory.objects.create(part=obj, **event)
 
     # --- editing ---
 
@@ -567,13 +689,15 @@ class ProductionService:
             "createdAt": part.created_at.isoformat(),
             "instrument": {"id": str(instrument.uuid), "model": instrument.instrument_model.name} if instrument else None,
             "owner": part.owner.email if part.owner else None,
+            # piece sold alone : its order line (a mounted part follows its instrument's order)
+            "order": order_lines.serialize(part.order_item) if part.order_item_id else None,
         }
 
     @staticmethod
     def instruments(offset=0, limit=50, search=None, status=None):
-        rows = Instrument.objects.select_related("instrument_model__instrument_type", "master_part", "owner").annotate(
-            part_count=Count("instrument_parts")
-        )
+        rows = Instrument.objects.select_related(
+            "instrument_model__instrument_type", "master_part", "owner", "order_item__order"
+        ).annotate(part_count=Count("instrument_parts"))
         if status:
             rows = rows.filter(status=status)
         text = _text(search)
@@ -597,6 +721,7 @@ class ProductionService:
                     "description": i.description,
                     "partCount": i.part_count,
                     "status": i.status,
+                    "order": order_lines.serialize(i.order_item),
                     "createdAt": i.created_at.isoformat(),
                 }
                 for i in rows.order_by("-created_at")[offset : offset + limit]
@@ -607,7 +732,7 @@ class ProductionService:
     def instrument_sheet(instrument_id):
         parts = Part.objects.select_related("part_model__part_type", "batch", "owner").order_by("-is_master", "created_at")
         instrument = (
-            Instrument.objects.select_related("instrument_model__instrument_type", "master_part", "owner")
+            Instrument.objects.select_related("instrument_model__instrument_type", "master_part", "owner", "order_item__order")
             .prefetch_related(
                 Prefetch("instrument_parts", queryset=parts),
                 Prefetch("history", queryset=InstrumentHistory.objects.select_related("created_by")),
@@ -634,6 +759,7 @@ class ProductionService:
             "status": instrument.status,
             "soldAt": instrument.sold_at.isoformat() if instrument.sold_at else None,
             "configuration": instrument.configuration,
+            "order": order_lines.serialize(instrument.order_item),
             "createdAt": instrument.created_at.isoformat(),
             "parts": [ProductionService._part_row(part) for part in part_list],
             "history": history,
@@ -641,7 +767,9 @@ class ProductionService:
 
     @staticmethod
     def parts(offset=0, limit=50, search=None, free_only=False, status=None):
-        rows = Part.objects.select_related("part_model__part_type", "batch", "owner", "instrument__instrument_model")
+        rows = Part.objects.select_related(
+            "part_model__part_type", "batch", "owner", "instrument__instrument_model", "order_item__order"
+        )
         if free_only:
             rows = rows.filter(instrument__isnull=True)
         if status:
@@ -663,7 +791,9 @@ class ProductionService:
     @staticmethod
     def part_sheet(part_id):
         part = (
-            Part.objects.select_related("part_model__part_type", "batch", "owner", "instrument__instrument_model")
+            Part.objects.select_related(
+                "part_model__part_type", "batch", "owner", "instrument__instrument_model", "order_item__order"
+            )
             .prefetch_related(
                 Prefetch("history", queryset=PartHistory.objects.select_related("created_by")),
                 Prefetch("part_identities", queryset=PartNFCIdentity.objects.select_related("batch").order_by("-created_at")),

@@ -48,5 +48,6 @@ def test_backoffice_list_reads_linked_rows_with_the_page(staff, starlight):  # n
 
 def test_order_sheet_queries(staff, order):  # noqa: F811
     sheet = "query ($id: UUID!) { backoffice { orderSheet(orderId: $id) } }"
-    assert count(lambda: run_staff(sheet, staff, id=str(order.uuid))) <= 6
+    # order, lines, payments, catalogue (2), instruments and pieces of the lines (2), products of the lines
+    assert count(lambda: run_staff(sheet, staff, id=str(order.uuid))) <= 9
     assert count(lambda: run_shop("query ($id: UUID!) { shopOrder(orderId: $id) }", id=str(order.uuid))) <= 2

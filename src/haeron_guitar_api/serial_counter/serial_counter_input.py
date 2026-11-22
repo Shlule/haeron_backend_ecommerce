@@ -7,6 +7,7 @@ from datetime import date
 @strawberry.input
 class SerialCounterFilterInput:
     factory_id: Optional[UUID] = None
+    part_model_id: Optional[UUID] = None
     year: Optional[str] = None
     date_after: Optional["date"] = None
     date_before: Optional["date"] = None

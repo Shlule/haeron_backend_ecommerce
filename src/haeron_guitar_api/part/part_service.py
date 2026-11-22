@@ -54,8 +54,6 @@ class PartService:
             production_snapshot=dto.production_snapshot
         )
 
-        SerialCounterService.next(dto.factory_id)
-
         return part
 
     @staticmethod
@@ -84,10 +82,8 @@ class PartService:
             )
         batch_code = batch.code
 
-        serial_counter = SerialCounterService.get_or_create_today(factory.uuid)
-        serial_value = serial_counter.last_value
-        current_year = serial_counter.year
-        next_value = serial_value + 1
+        # takes the number for good : call it only to create the part, in the same transaction
+        next_value, current_year = SerialCounterService.reserve(factory.uuid, part_model.uuid)
 
         return f"{str(factory.code)}{instrument_type_code}-{part_model.code}{str(current_year)}-{str(batch_code)}{str(next_value).zfill(4)}"
 

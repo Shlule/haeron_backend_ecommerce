@@ -491,7 +491,9 @@ class BoBuildPartInput:
     description: str = ""
     owner_email: Optional[str] = None
     is_master: bool = False
-    status: Optional[str] = None
+    order_id: Optional[uuid.UUID] = None  # piece sold alone : the order line it is made for
+    order_item_index: Optional[int] = None
+    status: Optional[str] = None  # sold when made for an order, else in stock
 
 
 @strawberry.input
@@ -584,6 +586,19 @@ def _set_production_status(
     info: strawberry.Info, target: str, target_id: uuid.UUID, status: str, note: str = ""
 ) -> JSON:
     return _production(lambda: ProductionService.set_status(target, target_id, status, note, _staff_user(info)))
+
+
+def _link_production_order(
+    info: strawberry.Info,
+    target: str,
+    target_id: uuid.UUID,
+    order_id: Optional[uuid.UUID] = None,
+    order_item_index: Optional[int] = None,
+) -> JSON:
+    """Gives an instrument or a piece to an order line (sold), or takes it back to stock (no order)."""
+    return _production(
+        lambda: ProductionService.link_order(target, target_id, order_id, order_item_index, _staff_user(info))
+    )
 
 
 def _delete_history_event(event_id: uuid.UUID) -> bool:
@@ -892,6 +907,7 @@ _add_mutation("ship_order", _ship_order)
 _mutation_fields["add_history_event"] = strawberry.mutation(resolver=_add_history_event)
 _mutation_fields["delete_history_event"] = strawberry.mutation(resolver=_delete_history_event)
 _mutation_fields["set_production_status"] = strawberry.mutation(resolver=_set_production_status)
+_add_mutation("link_production_order", _link_production_order)
 
 
 BackofficeQueries = strawberry.type(type("BackofficeQueries", (), {"__module__": __name__, **_query_fields}))

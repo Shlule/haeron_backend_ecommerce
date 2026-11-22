@@ -64,6 +64,11 @@ class Instrument(AuditMixin):
     # sold or not : selling the instrument sells its parts (see ProductionService.set_status)
     status = models.CharField(max_length=20, choices=SALE_STATUSES, default="in_stock", db_index=True)
     sold_at = models.DateTimeField(null=True, blank=True)
+    # order line it was made or taken from stock for (empty : in stock, or sold outside the shop).
+    # The order line keeps its own snapshot of what was sold : this link says what was delivered.
+    order_item = models.ForeignKey(
+        "OrderItem", null=True, blank=True, on_delete=models.SET_NULL, related_name="instruments"
+    )
 
 
 class InstrumentModel(models.Model):
@@ -151,6 +156,10 @@ class Part(AuditMixin):
     description = models.TextField(blank=True, default="")
     status = models.CharField(max_length=20, choices=SALE_STATUSES, default="in_stock", db_index=True)
     sold_at = models.DateTimeField(null=True, blank=True)
+    # order line of a piece sold alone ; a part mounted on an instrument follows the instrument's order
+    order_item = models.ForeignKey(
+        "OrderItem", null=True, blank=True, on_delete=models.SET_NULL, related_name="parts"
+    )
     production_snapshot = models.JSONField(
         default=dict,
         blank=True,
@@ -260,8 +269,13 @@ class Option(AuditMixin):
 
 
 class SerialCounter(models.Model):
+    """Last number given, per workshop, part model and year : the bodies of 2026 go 0001, 0002, 0003...
+    The model code is in the serial number, so two models never share a number.
+    A counter without part model is the old one shared by every part (kept, no longer used)."""
+
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     factory = models.ForeignKey("Factory", on_delete=models.CASCADE)
+    part_model = models.ForeignKey("PartModel", null=True, blank=True, on_delete=models.CASCADE)
     year = models.PositiveIntegerField()
     last_value = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -269,7 +283,7 @@ class SerialCounter(models.Model):
 
     class Meta:
         unique_together = [
-            ("factory", "year")
+            ("factory", "part_model", "year")
         ]
 
 

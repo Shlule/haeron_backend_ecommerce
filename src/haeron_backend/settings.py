@@ -88,6 +88,8 @@ STRAWBERRY_DJANGO = {
 }
 
 MIDDLEWARE = [
+    # compresses the JSON responses (5 to 8 times lighter) ; first, so it compresses the final response
+    "django.middleware.gzip.GZipMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -200,6 +202,9 @@ WSGI_APPLICATION = "haeron_backend.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# psycopg 3 with a pool : the connections to Supabase stay open and are reused from one request to the next,
+# instead of a new connection (network + TLS + login) for every request. DB_POOL=False goes back to one per request.
+DB_POOL = config("DB_POOL", default=True, cast=bool)
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -208,6 +213,16 @@ DATABASES = {
         "PASSWORD": config("DB_PASSWORD"),
         "HOST": config("DB_HOST"),
         "PORT": config("DB_PORT"),
+        # the Supabase pooler in transaction mode (port 6543) keeps neither prepared statements nor server cursors
+        "DISABLE_SERVER_SIDE_CURSORS": True,
+        "OPTIONS": {
+            "prepare_threshold": None,
+            **(
+                {"pool": {"min_size": 1, "max_size": config("DB_POOL_MAX_SIZE", default=10, cast=int), "timeout": 10}}
+                if DB_POOL
+                else {}
+            ),
+        },
     }
 }
 

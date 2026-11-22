@@ -23,6 +23,7 @@ class AuditInterface:
 class SerialCounterGQLType:
     uuid: ID
     factory: "FactoryGQLType"
+    part_model: Optional["PartModelGQLType"]
     year: str
     last_value: int
 

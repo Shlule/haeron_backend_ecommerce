@@ -16,13 +16,19 @@ from .permissions import agent_type_permission
 from haeron_guitar_api.part.part_service import PartService
 from provisionning_agent.engraving_service import EngravingService
 from .selectors import get_part_for_verification, build_verification_response, verification_response_to_dict
-from haeron_guitar_api.models import PartNFCIdentity, PartEngravingMark
+from haeron_guitar_api.models import Part, PartEngravingMark, PartNFCIdentity
 
 logger = logging.getLogger(__name__)
 
 ALLOWED_CONFIRM_STATUSES = {"confirmed", "failed"}
 VALID_MARK_TYPES = {choice[0] for choice in PartEngravingMark._meta.get_field("mark_type").choices}
 MAX_CONFIRM_BATCH_SIZE = 1000
+
+
+def _refuse(code, detail: str) -> Response:
+    """Refusal with its reason, shown by the agent."""
+    logger.warning("Provisioning refusé : %s", detail)
+    return Response({"detail": detail}, status=code)
 
 
 def _parse_uuid(value, field_name: str) -> uuid_lib.UUID:
@@ -81,24 +87,56 @@ class ProvisionIdentityView(APIView):
 
     def post(self, request):
         agent: ProvisionningAgent = request.user
-        serial_number = request.data["serial_number"]
-        part = request.data["part_uuid"]
-        nfc_uid = request.data["nfc_uid"]
-        initial_counter = request.data["initial_counter"]
+        serial_number = request.data.get("serial_number")
+        nfc_uid = request.data.get("nfc_uid")
+        initial_counter = request.data.get("initial_counter")
+        if not serial_number or not nfc_uid:
+            raise ValidationError({"detail": "serial_number et nfc_uid sont obligatoires."})
+        part_uuid = _parse_uuid(request.data.get("part_uuid"), "part_uuid")
+
+        # the refusals are checked here, so the agent gets a clear reason and not a 500
+        part = Part.objects.filter(serial_number=serial_number).first()
+        if part is None:
+            return _refuse(status.HTTP_404_NOT_FOUND, f"Aucune pièce avec le numéro de série {serial_number}.")
+        if part.uuid != part_uuid:
+            return _refuse(
+                status.HTTP_400_BAD_REQUEST,
+                f"Le numéro de série {serial_number} et l'UUID {part_uuid} ne désignent pas la même pièce.",
+            )
+        active = PartNFCIdentity.objects.filter(part=part, status="active").first()
+        if active is not None:
+            return _refuse(
+                status.HTTP_409_CONFLICT,
+                f"La pièce {serial_number} a déjà un tag actif (UID {active.nfc_uid}) : révoque-le avant de reprogrammer.",
+            )
+        if part.batch_id is None:
+            return _refuse(status.HTTP_409_CONFLICT, f"La pièce {serial_number} n'a pas de lot : pas de clé possible.")
 
         already_provisioned = PartNFCIdentity.objects.filter(part=part).exists()
-
-
-        result = PartService.provideNFCIdentity(serial_number, part, nfc_uid_p=nfc_uid, initial_counter=initial_counter)
-        tag_key = result.get("tag_key", None)
-        old_tag_key = result.get("old_tag_key", None)
-        version = result.get("version", None)
+        try:
+            result = PartService.provideNFCIdentity(
+                serial_number, str(part_uuid), nfc_uid_p=nfc_uid, initial_counter=initial_counter
+            )
+        except Exception as e:
+            logger.exception("Clé NFC impossible à générer pour %s", serial_number)
+            return _refuse(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"Clé NFC impossible à générer ({e.__class__.__name__}) : vérifie Vault et les clés du modèle et du lot.",
+            )
+        tag_key = result.get("tag_key")
+        old_tag_key = result.get("old_tag_key")
+        if tag_key is None or old_tag_key is None:
+            return _refuse(status.HTTP_409_CONFLICT, f"Le backend a refusé de générer une clé pour {serial_number}.")
 
         logger.info("Identité NFC générée pour part %s par agent %s", serial_number, agent.name)
-
-        if old_tag_key and tag_key:
-            return Response({"tag_key": tag_key.hex(), "old_tag_key": old_tag_key.hex(), "version": version, "is_rewrite": already_provisioned})
-        return None
+        return Response(
+            {
+                "tag_key": tag_key.hex(),
+                "old_tag_key": old_tag_key.hex(),
+                "version": result.get("version"),
+                "is_rewrite": already_provisioned,
+            }
+        )
 
 
 class ConfirmProvisionningView(APIView):
@@ -263,4 +301,4 @@ class VerifyPart(APIView):
             return Response({"status": "failed", "detail": "Validation failed"}, status=status.HTTP_404_NOT_FOUND)
 
         response_dto = build_verification_response(part=part)
-        return Response(verification_response_to_dict(response_dto), status=status.HTTP_200_OK)
+        return Response(verification_response_to_dict(response_dto), status=status.HTTP_200_OK)
