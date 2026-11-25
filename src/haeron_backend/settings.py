@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import sys
 from pathlib import Path
 from decouple import config
 import stripe
@@ -204,7 +205,9 @@ WSGI_APPLICATION = "haeron_backend.wsgi.application"
 
 # psycopg 3 with a pool : the connections to Supabase stay open and are reused from one request to the next,
 # instead of a new connection (network + TLS + login) for every request. DB_POOL=False goes back to one per request.
-DB_POOL = config("DB_POOL", default=True, cast=bool)
+# Only the server (uvicorn) gets it by default : the manage.py commands (migrate, shell, seed...) live a few seconds,
+# and without a pool a database that cannot be reached shows its real error instead of a "PoolTimeout".
+DB_POOL = config("DB_POOL", default=Path(sys.argv[0]).name != "manage.py", cast=bool)
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",

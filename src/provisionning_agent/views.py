@@ -112,7 +112,9 @@ class ProvisionIdentityView(APIView):
         if part.batch_id is None:
             return _refuse(status.HTTP_409_CONFLICT, f"La pièce {serial_number} n'a pas de lot : pas de clé possible.")
 
-        already_provisioned = PartNFCIdentity.objects.filter(part=part).exists()
+        # rewrite = this physical tag was already written (its keys and file settings are no longer the factory ones).
+        # A new tag replacing a broken one is not a rewrite, even if the part had a tag before.
+        already_provisioned = PartNFCIdentity.objects.filter(nfc_uid=nfc_uid).exists()
         try:
             result = PartService.provideNFCIdentity(
                 serial_number, str(part_uuid), nfc_uid_p=nfc_uid, initial_counter=initial_counter
@@ -206,6 +208,7 @@ class EngravingFetchView(APIView):
             mark_type=mark_type, part_model_uuid=part_model_uuid, limit=limit,
         )
 
+        keys = {}  # Vault read once per part model for the hidden codes
         templates_payload = [
             {
                 "template_uuid": str(template.uuid),
@@ -220,7 +223,7 @@ class EngravingFetchView(APIView):
                         "part_uuid": str(mark.part_id),
                         "serial_number": mark.part.serial_number,
                         "mark_type": mark.mark_type,
-                        "value": mark.value,
+                        "value": EngravingService.engraving_value(mark, keys),
                         "location": mark.location,
                     }
                     for mark in marks

@@ -3,12 +3,14 @@ Each one links to the order page of the shop, which shows the status and the par
 An e-mail never blocks the order : a failure is logged and the payment or the shipment stays recorded."""
 
 import logging
+from zoneinfo import ZoneInfo
 
 from decouple import config
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Prefetch
+from django.utils import timezone
 from django.utils.html import escape
 
 from ..models import Order, OrderItem
@@ -25,6 +27,15 @@ COUNTRIES = {"FR": "France", "BE": "Belgique", "CH": "Suisse", "LU": "Luxembourg
 
 def order_link(order):
     return f"{SHOP_URL}/commande/{order.uuid}"
+
+
+def _terms_line(order):
+    """The CGV accepted at checkout, sent with the confirmation so the customer keeps them."""
+    if not order.terms_accepted_at:
+        return f"Conditions générales de vente : {SHOP_URL}/cgv"
+    # French time for the customer (the server works in UTC)
+    day = timezone.localtime(order.terms_accepted_at, ZoneInfo("Europe/Paris")).strftime("%d/%m/%Y à %H:%M")
+    return f"Conditions générales de vente acceptées le {day} : {SHOP_URL}/cgv"
 
 
 def _euros(amount):
@@ -106,6 +117,7 @@ class OrderEmails:
             "Livraison :\n" + "\n".join(address) + "\n\n"
             "Nous préparons votre commande et vous écrirons dès qu'elle sera expédiée, avec le numéro de suivi du colis.\n"
             f"Suivre votre commande : {link}\n\n"
+            f"{_terms_line(order)}\n\n"
             "Haeron Guitar"
         )
 
@@ -131,7 +143,8 @@ class OrderEmails:
             '<p style="margin:24px 0 4px;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#888">Livraison</p>'
             f'<p style="margin:0;line-height:1.5">{"<br>".join(escape(line) for line in address)}</p>'
             "<p>Nous préparons votre commande et vous écrirons dès qu'elle sera expédiée, "
-            "avec le numéro de suivi du colis.</p>" + _button("Suivre ma commande", link),
+            "avec le numéro de suivi du colis.</p>" + _button("Suivre ma commande", link)
+            + f'<p style="font-size:12px;color:#888">{escape(_terms_line(order))}</p>',
         )
         send_mail(f"Haeron Guitar : commande {reference} confirmée", text, settings.DEFAULT_FROM_EMAIL, [order.email],
                   html_message=html)

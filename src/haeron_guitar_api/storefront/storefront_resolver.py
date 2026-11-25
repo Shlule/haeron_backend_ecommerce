@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from strawberry.scalars import JSON
 
 from ..checkout.checkout_dto import CustomerDTO
+from ..partners import partner_service
 from ..payments.payment_service import PaymentService
 from .storefront_input import AddToCartInput, PlaceOrderInput, UpdateCartItemInput
 from .storefront_service import StorefrontService
@@ -32,9 +33,19 @@ class StorefrontQuery:
         return StorefrontService.products()
 
     @strawberry.field
+    def shop_compatibility(self) -> JSON:
+        """Which part models fit which instrument model : the compatibility page of the shop."""
+        return StorefrontService.compatibility()
+
+    @strawberry.field
     def shop_cart(self, info: strawberry.Info, cart_key: Optional[str] = None) -> JSON:
         cart = StorefrontService.find_cart(user=_user(info), cart_key=cart_key)
         return StorefrontService.serialize(cart, cart_key if cart else None)
+
+    @strawberry.field
+    def shop_partner_code(self, code: str) -> Optional[JSON]:
+        """Discount of a partner code, or null when the code does not work (checked before placing the order)."""
+        return partner_service.public_code(code)
 
     @strawberry.field
     def shop_order(self, order_id: UUID) -> Optional[JSON]:
@@ -87,7 +98,15 @@ class StorefrontMutation:
             phone=input.phone,
         )
         try:
-            order = StorefrontService.checkout(input.idempotency_key, customer, user=_user(info), cart_key=input.cart_key)
+            order = StorefrontService.checkout(
+                input.idempotency_key,
+                customer,
+                user=_user(info),
+                cart_key=input.cart_key,
+                accepted_terms=input.accepted_terms,
+                accepted_colour_terms=input.accepted_colour_terms,
+                partner_code=input.partner_code,
+            )
         except (ValidationError, ValueError) as error:
             raise Exception(_error_message(error)) from error
         return StorefrontService.serialize_order(order)

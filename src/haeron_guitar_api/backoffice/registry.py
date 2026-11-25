@@ -70,6 +70,13 @@ RESOURCES = [
     Resource(models.PartEngravingMark, "Gravures", "Production", readonly=True),
     Resource(models.EngravingBatch, "Lots de gravure", "Production", readonly=True),
     Resource(models.SerialCounter, "Compteurs de série", "Production", readonly=True),
+    # achats et stock : fournisseurs et articles se saisissent ici ; factures et mouvements passent par leurs pages
+    # (une facture fait entrer du stock, un mouvement le fait sortir)
+    Resource(models.Supplier, "Fournisseurs", "Achats"),
+    Resource(models.StockItem, "Articles en stock", "Achats"),
+    Resource(models.PurchaseInvoice, "Factures d'achat", "Achats", readonly=True, exclude=["file"]),
+    Resource(models.PurchaseInvoiceLine, "Lignes de facture d'achat", "Achats", readonly=True),
+    Resource(models.StockMovement, "Mouvements de stock", "Achats", readonly=True),
     # ventes
     Resource(models.Cart, "Paniers", "Ventes", readonly=True),
     Resource(models.CartItem, "Lignes de panier", "Ventes", readonly=True),

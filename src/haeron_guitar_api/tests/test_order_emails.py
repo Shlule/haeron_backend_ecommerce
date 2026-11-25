@@ -44,6 +44,7 @@ def test_stripe_payment_sends_one_confirmation(order, stripe_api, emails):  # no
     assert f"/commande/{order.uuid}" in mail.body and "290,00 €" in mail.body and "Couleur blue" in mail.body
     html = mail.alternatives[0][0]
     assert "Suivre ma commande" in html and "1 rue de la Paix" in html
+    assert "Conditions générales de vente" in mail.body and "/cgv" in html
 
 
 def test_unpaid_order_gets_no_confirmation(order, stripe_api, emails):  # noqa: F811

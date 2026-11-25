@@ -1,6 +1,7 @@
 import secrets
 
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 from ..cartItem.cartItem_dto import createCartItemDTO
 from ..cartItem.cartItem_service import CartItemService
@@ -8,7 +9,7 @@ from ..checkout.checkout_dto import CustomerDTO
 from ..checkout.checkout_service import CheckoutService
 from django.db.models import Prefetch
 
-from ..models import Cart, CartItem, Order, OrderItem, Product
+from ..models import Cart, CartItem, ComponentCompatibility, Order, OrderItem, Product
 from ..order.shipping import serialize_shipment
 from ..production.product_catalogue import kind_of, with_kind
 
@@ -33,6 +34,33 @@ class StorefrontService:
                 "model3d": product.model_3d,
             }
             for product in products
+        ]
+
+    @staticmethod
+    def compatibility():
+        """Part models fitting each instrument model sold in the shop, by part type (public page /compatibilite).
+        Prototypes and discontinued models are left out ; "service only" ones are kept : they are still made for repairs."""
+        rows = (
+            ComponentCompatibility.objects.filter(
+                instrument_model__products__is_visible=True, part_model__status__in=["active", "service_only"]
+            )
+            .values_list(
+                "instrument_model__name",
+                "part_model__part_type__name",
+                "part_model__name",
+                "part_model__code",
+                "part_model__status",
+            )
+            .distinct()
+            .order_by("instrument_model__name", "part_model__part_type__name", "part_model__name")
+        )
+        models = {}
+        for instrument, part_type, name, code, status in rows:
+            types = models.setdefault(instrument, {})
+            types.setdefault(part_type, []).append({"name": name, "code": code, "serviceOnly": status == "service_only"})
+        return [
+            {"instrumentModel": instrument, "parts": [{"type": t, "models": m} for t, m in types.items()]}
+            for instrument, types in models.items()
         ]
 
     @staticmethod
@@ -75,15 +103,23 @@ class StorefrontService:
         return cart
 
     @staticmethod
-    def checkout(idempotency_key, customer: CustomerDTO, user=None, cart_key=None):
+    def checkout(idempotency_key, customer: CustomerDTO, user=None, cart_key=None, accepted_terms=False,
+                 accepted_colour_terms=False, partner_code=""):
         logged_in = user is not None and user.is_authenticated
         if not logged_in and not cart_key:
             raise ValidationError("Votre panier est vide.")
+        # the page already blocks the button : this is for a request sent without it
+        if not accepted_terms:
+            raise ValidationError("Vous devez accepter les conditions générales de vente.")
+        if not accepted_colour_terms:
+            raise ValidationError("Vous devez accepter l'information sur les couleurs et les choix de configuration.")
         return CheckoutService.checkout(
             idempotency_key,
             customer,
             user=user if logged_in else None,
             session_key=None if logged_in else cart_key,
+            accepted_at=timezone.now(),
+            partner_code=partner_code,
         )
 
     @staticmethod
@@ -116,6 +152,11 @@ class StorefrontService:
             "city": order.city,
             "country": order.country,
             "total": float(order.total_price or 0),
+            # partner code : the discount given (total is already the amount to pay)
+            "partnerCode": order.partner_code,
+            "discountPercent": float(order.discount_percent),
+            "discount": float(order.discount_amount),
+            "subtotal": float((order.total_price or 0) + order.discount_amount),
             "shipment": serialize_shipment(order),
             "items": [
                 {

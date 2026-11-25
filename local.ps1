@@ -3,8 +3,8 @@
 #   .\local.ps1 create_staff_user admin admin@example.com      .\local.ps1 pytest
 # Ces variables ne valent que le temps de la commande : le reste de ton terminal (et le .env) ne change pas.
 $local = @{
-    DB_HOST = 'localhost'; DB_PORT = '5433'; DB_NAME = 'haeron'; DB_USER = 'haeron'; DB_PASSWORD = 'haeron'
-    VAULT_ADDR = 'http://localhost:8201'; VAULT_TOKEN = 'haeron-dev'
+    DB_HOST = '127.0.0.1'; DB_PORT = '5433'; DB_NAME = 'haeron'; DB_USER = 'haeron'; DB_PASSWORD = 'haeron'
+    VAULT_ADDR = 'http://127.0.0.1:8201'; VAULT_TOKEN = 'haeron-dev'
 }
 $previous = @{}
 foreach ($name in $local.Keys) {

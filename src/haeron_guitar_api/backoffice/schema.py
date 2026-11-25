@@ -28,6 +28,9 @@ from authUser.permission.permission import HasRole, IsAuthenticated
 from ..finance.finance_service import FinanceService
 from ..order.order_service import OrderService
 from ..payments.payment_service import PaymentService
+from ..production.hidden_mark_service import HiddenMarkService
+from ..partners.partner_service import PartnerService
+from ..purchasing.purchasing_service import PurchasingService, StockService
 from ..production.part_model_builder import PartModelBuilder
 from ..production.piece_product_builder import PieceProductBuilder
 from ..production.product_catalogue import ProductCatalogue
@@ -450,6 +453,180 @@ _query_fields["finances"] = strawberry.field(
     resolver=_finances, permission_classes=[IsAuthenticated, HasRole(*FINANCE_ROLES)]
 )
 
+
+# purchases : supplier invoices (managers only, like the finances) and the stock of the parts bought
+# (see purchasing/purchasing_service.py)
+_finance_permissions = [IsAuthenticated, HasRole(*FINANCE_ROLES)]
+
+
+@strawberry.input
+class BoPurchaseLineInput:
+    unit_price_ht: decimal.Decimal
+    label: str = ""
+    category: str = "other"
+    stock_item_id: Optional[uuid.UUID] = None
+    zone: str = ""
+    quantity: decimal.Decimal = decimal.Decimal("1")
+    vat_rate: decimal.Decimal = decimal.Decimal("20")
+
+
+@strawberry.input
+class BoPurchaseInvoiceInput:
+    number: str
+    issued_on: datetime.date
+    lines: list[BoPurchaseLineInput]
+    # an existing supplier, or the name of a new one (created with the invoice)
+    supplier_id: Optional[uuid.UUID] = None
+    supplier_name: str = ""
+    due_on: Optional[datetime.date] = None
+    paid_on: Optional[datetime.date] = None
+    payment_method: str = ""
+    notes: str = ""
+
+
+@strawberry.input
+class BoPurchaseInvoiceUpdateInput:
+    number: str
+    issued_on: datetime.date
+    due_on: Optional[datetime.date] = None
+    paid_on: Optional[datetime.date] = None
+    payment_method: str = ""
+    notes: str = ""
+
+
+@strawberry.input
+class BoStockMoveInput:
+    stock_item_id: uuid.UUID
+    kind: str
+    quantity: decimal.Decimal
+    zone: str = "workshop"
+    instrument_id: Optional[uuid.UUID] = None
+    note: str = ""
+
+
+def _purchasing_form() -> JSON:
+    return PurchasingService.form_data()
+
+
+def _purchase_invoices(offset: int = 0, limit: int = 50, search: Optional[str] = None, unpaid_only: bool = False) -> JSON:
+    return PurchasingService.invoices(offset, limit, search, unpaid_only)
+
+
+def _purchase_invoice(invoice_id: uuid.UUID) -> Optional[JSON]:
+    return PurchasingService.invoice(invoice_id)
+
+
+def _create_purchase_invoice(info: strawberry.Info, data: BoPurchaseInvoiceInput) -> JSON:
+    payload = strawberry.asdict(data)
+    return _production(lambda: PurchasingService.create_invoice(payload, _staff_user(info)))
+
+
+def _update_purchase_invoice(info: strawberry.Info, invoice_id: uuid.UUID, data: BoPurchaseInvoiceUpdateInput) -> JSON:
+    payload = strawberry.asdict(data)
+    return _production(lambda: PurchasingService.update_invoice(invoice_id, payload, _staff_user(info)))
+
+
+def _delete_purchase_invoice(invoice_id: uuid.UUID) -> bool:
+    return _production(lambda: PurchasingService.delete_invoice(invoice_id))
+
+
+def _stock(search: Optional[str] = None, family: Optional[str] = None) -> JSON:
+    return StockService.overview(search, family)
+
+
+def _stock_item_sheet(item_id: uuid.UUID) -> Optional[JSON]:
+    return StockService.item_sheet(item_id)
+
+
+def _instrument_stock_parts(instrument_id: uuid.UUID) -> JSON:
+    return StockService.instrument_cost(instrument_id)
+
+
+def _move_stock(info: strawberry.Info, data: BoStockMoveInput) -> JSON:
+    payload = strawberry.asdict(data)
+    return _production(lambda: StockService.move(payload, _staff_user(info)))
+
+
+_query_fields["purchasing_form"] = strawberry.field(resolver=_purchasing_form)
+_query_fields["purchase_invoices"] = strawberry.field(resolver=_purchase_invoices, permission_classes=_finance_permissions)
+_query_fields["purchase_invoice"] = strawberry.field(resolver=_purchase_invoice, permission_classes=_finance_permissions)
+_query_fields["stock"] = strawberry.field(resolver=_stock)
+_query_fields["stock_item_sheet"] = strawberry.field(resolver=_stock_item_sheet)
+_query_fields["instrument_stock_parts"] = strawberry.field(resolver=_instrument_stock_parts)
+_mutation_fields["create_purchase_invoice"] = strawberry.mutation(
+    resolver=_create_purchase_invoice, permission_classes=_finance_permissions
+)
+_mutation_fields["update_purchase_invoice"] = strawberry.mutation(
+    resolver=_update_purchase_invoice, permission_classes=_finance_permissions
+)
+_mutation_fields["delete_purchase_invoice"] = strawberry.mutation(
+    resolver=_delete_purchase_invoice, permission_classes=_finance_permissions
+)
+_mutation_fields["move_stock"] = strawberry.mutation(resolver=_move_stock)
+
+
+# business partners : code or link with a discount, commission on what the customers paid, payouts
+# (managers only, like the finances ; see partners/partner_service.py)
+@strawberry.input
+class BoPartnerInput:
+    name: str
+    code: str
+    discount_percent: decimal.Decimal = decimal.Decimal("5")
+    commission_percent: decimal.Decimal = decimal.Decimal("10")
+    is_active: bool = True
+    valid_until: Optional[datetime.date] = None
+    email: str = ""
+    phone: str = ""
+    company: str = ""
+    siret: str = ""
+    address: str = ""
+    notes: str = ""
+
+
+@strawberry.input
+class BoPartnerPayoutInput:
+    amount: decimal.Decimal
+    paid_on: Optional[datetime.date] = None
+    payment_method: str = ""
+    note: str = ""
+
+
+def _partners() -> JSON:
+    return PartnerService.list()
+
+
+def _partner(partner_id: uuid.UUID) -> Optional[JSON]:
+    return PartnerService.detail(partner_id)
+
+
+def _save_partner(data: BoPartnerInput, partner_id: Optional[uuid.UUID] = None) -> JSON:
+    payload = strawberry.asdict(data)
+    return _production(lambda: PartnerService.save(payload, partner_id))
+
+
+def _delete_partner(partner_id: uuid.UUID) -> bool:
+    return _production(lambda: PartnerService.delete(partner_id))
+
+
+def _record_partner_payout(info: strawberry.Info, partner_id: uuid.UUID, data: BoPartnerPayoutInput) -> JSON:
+    payload = strawberry.asdict(data)
+    return _production(lambda: PartnerService.record_payout(partner_id, payload, _staff_user(info)))
+
+
+def _delete_partner_payout(payout_id: uuid.UUID) -> JSON:
+    return _production(lambda: PartnerService.delete_payout(payout_id))
+
+
+_query_fields["partners"] = strawberry.field(resolver=_partners, permission_classes=_finance_permissions)
+_query_fields["partner"] = strawberry.field(resolver=_partner, permission_classes=_finance_permissions)
+for _name, _resolver in (
+    ("save_partner", _save_partner),
+    ("delete_partner", _delete_partner),
+    ("record_partner_payout", _record_partner_payout),
+    ("delete_partner_payout", _delete_partner_payout),
+):
+    _mutation_fields[_name] = strawberry.mutation(resolver=_resolver, permission_classes=_finance_permissions)
+
 # workshop : instruments and parts made, their history (see production/production_service.py)
 @strawberry.input
 class BoOptionPriceInput:
@@ -611,6 +788,26 @@ _query_fields["instruments"] = strawberry.field(resolver=_instruments)
 _query_fields["instrument_sheet"] = strawberry.field(resolver=_instrument_sheet)
 _query_fields["produced_parts"] = strawberry.field(resolver=_produced_parts)
 _query_fields["part_sheet"] = strawberry.field(resolver=_part_sheet)
+
+
+def _check_hidden_mark(part_id: uuid.UUID, code: str) -> JSON:
+    return _production(lambda: ProductionService.check_hidden_mark(part_id, code))
+
+
+_query_fields["check_hidden_mark"] = strawberry.field(resolver=_check_hidden_mark)
+
+
+def _hidden_mark_to_engrave(info: strawberry.Info, part_id: uuid.UUID) -> JSON:
+    return _production(lambda: HiddenMarkService.code_to_engrave(part_id, _staff_user(info)))
+
+
+def _confirm_hidden_mark(info: strawberry.Info, part_id: uuid.UUID, code: str, location: str = "") -> JSON:
+    def confirm():
+        # location : where the code was engraved, written by hand (the code does not depend on it)
+        HiddenMarkService.confirm_engraving(part_id, code, location, _staff_user(info))
+        return ProductionService.part_sheet(part_id)
+
+    return _production(confirm)
 # making parts gives serial numbers and fixes their options for good : managers only
 BUILD_ROLES = ("superadmin", "admin")
 _build_permissions = [IsAuthenticated, HasRole(*BUILD_ROLES)]
@@ -627,6 +824,13 @@ _mutation_fields["build_part"] = strawberry.mutation(resolver=_build_part, permi
 _mutation_fields["update_instrument_info"] = strawberry.mutation(resolver=_update_instrument_info)
 _mutation_fields["update_part_info"] = strawberry.mutation(resolver=_update_part_info)
 _mutation_fields["create_part_batch"] = strawberry.mutation(resolver=_create_part_batch, permission_classes=_build_permissions)
+# the hidden code is shown to the people who make the parts, and only until it is engraved and checked
+_mutation_fields["hidden_mark_to_engrave"] = strawberry.mutation(
+    resolver=_hidden_mark_to_engrave, permission_classes=_build_permissions
+)
+_mutation_fields["confirm_hidden_mark"] = strawberry.mutation(
+    resolver=_confirm_hidden_mark, permission_classes=_build_permissions
+)
 
 
 # new part model of the catalogue with its options and values in one form : managers only, like making parts

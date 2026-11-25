@@ -15,6 +15,8 @@ services:
       - haeron-dev-db:/var/lib/postgresql/data
 
   # Vault en mode dev : en mémoire (les clés disparaissent à l'arrêt), moteur KV v2 déjà monté sur secret/
+  # Après un redémarrage de Docker, la base garde ses pièces mais Vault a perdu leurs clés : les recréer avec
+  #   .\local.ps1 restore_dev_vault_keys
   vault:
     image: hashicorp/vault:1.18
     environment:

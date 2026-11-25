@@ -5,6 +5,7 @@ from django.core.validators import validate_email
 from django.db import transaction
 
 from ..models import Cart, Order, OrderItem
+from ..partners import partner_service
 from .checkout_dto import CustomerDTO
 
 
@@ -20,8 +21,10 @@ class CheckoutService:
 
     @staticmethod
     @transaction.atomic
-    def checkout(idempotency_key, customer: CustomerDTO, user=None, session_key=None):
-        """Turns the active cart into a pending order (waiting for the payment) and closes the cart."""
+    def checkout(idempotency_key, customer: CustomerDTO, user=None, session_key=None, accepted_at=None, partner_code=""):
+        """Turns the active cart into a pending order (waiting for the payment) and closes the cart.
+        accepted_at : when the customer accepted the CGV and the colour terms, kept on the order as proof.
+        partner_code : code of a partner (typed or from its link), gives its discount (see partners/partner_service.py)."""
         if not user and not session_key:
             raise ValueError("User or session_key are not either present")
 
@@ -50,6 +53,8 @@ class CheckoutService:
             postal_code=customer.postal_code.strip(),
             city=customer.city.strip(),
             country=(customer.country or "FR").strip().upper(),
+            terms_accepted_at=accepted_at,
+            colour_terms_accepted_at=accepted_at,
         )
 
         # every line in one insert
@@ -69,8 +74,13 @@ class CheckoutService:
         )
         total = sum((item.unit_price * item.quantity for item in items), Decimal("0.00"))
 
-        order.total_price = total
-        order.save(update_fields=["total_price"])
+        # partner code : discount on the total, partner and rates kept on the order
+        order.total_price = partner_service.apply_to_order(order, partner_code, total)
+        order.save(
+            update_fields=[
+                "total_price", "partner", "partner_code", "discount_percent", "discount_amount", "commission_percent"
+            ]
+        )
 
         # the cart is now an order : the next visit starts a new cart
         cart.is_active = False

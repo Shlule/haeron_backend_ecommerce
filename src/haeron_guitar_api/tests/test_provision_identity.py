@@ -62,3 +62,48 @@ def test_key_is_given_for_a_free_part(agent, part):
         response = ask(agent, part)
     assert response.status_code == 200
     assert response.json() == {"tag_key": bytes(range(16)).hex(), "old_tag_key": "00" * 16, "version": 1, "is_rewrite": False}
+
+
+class FakeVault:
+    """Fixed secrets : the keys are derived for real, without a Vault server."""
+
+    def get_vault_path(self, kind, **ids):
+        return kind
+
+    def get_secret(self, path):
+        return path.encode().ljust(32, b"0")
+
+
+def key(uid, version):
+    from haeron_guitar_api.security.vault.hkdf import HKDFService
+
+    vault = FakeVault()
+    return HKDFService.derive_tag_key(vault.get_secret("domain"), vault.get_secret("batch"), uid, version).hex()
+
+
+def revoke(agent, part, uid):
+    body = {"serial_number": part.serial_number, "part_uuid": str(part.uuid), "nfc_uid": uid}
+    assert agent.post("/agents/revoke-identity/", body, format="json").json()["status"] == "success"
+
+
+def test_a_broken_tag_is_replaced_by_a_new_one(agent, part):
+    with mock.patch("haeron_guitar_api.part.part_service.get_vault_service", return_value=FakeVault()):
+        first = ask(agent, part, nfc_uid="04aaaa").json()
+        PartNFCIdentity.objects.filter(nfc_uid="04aaaa").update(status="active")
+        revoke(agent, part, "04aaaa")  # the tag no longer answers : revoked by its UID, read in the back-office
+        new_tag = ask(agent, part, nfc_uid="04bbbb").json()
+
+    assert first == {"tag_key": key("04aaaa", 1), "old_tag_key": "00" * 16, "version": 1, "is_rewrite": False}
+    # a new tag still has its factory key, whatever the part had before
+    assert new_tag == {"tag_key": key("04bbbb", 1), "old_tag_key": "00" * 16, "version": 1, "is_rewrite": False}
+    old = PartNFCIdentity.objects.get(nfc_uid="04aaaa")
+    assert old.status == "revoked" and old.revoked_at is not None
+
+
+def test_the_same_tag_written_again_moves_to_the_next_key(agent, part):
+    with mock.patch("haeron_guitar_api.part.part_service.get_vault_service", return_value=FakeVault()):
+        ask(agent, part, nfc_uid="04aaaa")
+        PartNFCIdentity.objects.filter(nfc_uid="04aaaa").update(status="active")
+        revoke(agent, part, "04aaaa")
+        again = ask(agent, part, nfc_uid="04aaaa").json()
+    assert again == {"tag_key": key("04aaaa", 2), "old_tag_key": key("04aaaa", 1), "version": 2, "is_rewrite": True}

@@ -436,6 +436,19 @@ class Order(models.Model):
     tracking_url = models.URLField(max_length=500, blank=True, default="")
     shipped_at = models.DateTimeField(null=True, blank=True)
 
+    # proof of the two boxes ticked before paying : the CGV, and (separately, article L217-5 II of the Code de la
+    # consommation) the colours shown being indicative and the configuration choices not being refunded
+    terms_accepted_at = models.DateTimeField(null=True, blank=True)
+    colour_terms_accepted_at = models.DateTimeField(null=True, blank=True)
+
+    # partner code used (typed or from a partner link) : the discount given and the partner rate, copied at checkout
+    # so changing the partner later does not change past orders (see partners/partner_service.py)
+    partner = models.ForeignKey("Partner", null=True, blank=True, on_delete=models.PROTECT, related_name="orders")
+    partner_code = models.CharField(max_length=40, blank=True, default="")
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    commission_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
 
@@ -564,3 +577,167 @@ class ConfigurationResult(models.Model):
     target_values = models.ManyToManyField("SelectableValue", related_name="result_targets")
 
     # values = models.ManyToManyField("SelectableValue", related_name="result_values")
+
+
+# --- achats et stock -------------------------------------------------------------------------------------------------
+# What the workshop buys : supplier invoices (every expense, with its PDF), and the parts bought from others (pickups,
+# tuners, bridges...) kept in stock, either for building ("Atelier") or for selling alone ("Vente").
+
+EXPENSE_CATEGORIES = [
+    ("components", "Composants achetés"),
+    ("materials", "Bois et matières"),
+    ("tools", "Outillage et machines"),
+    ("shipping", "Transport et emballage"),
+    ("marketing", "Publicité et salons"),
+    ("software", "Logiciels et abonnements"),
+    ("premises", "Loyer et charges"),
+    ("services", "Prestations et honoraires"),
+    ("other", "Autre"),
+]
+STOCK_ZONES = [("workshop", "Atelier"), ("shop", "Vente")]
+PAYMENT_METHODS = [
+    ("transfer", "Virement"),
+    ("card", "Carte"),
+    ("direct_debit", "Prélèvement"),
+    ("cash", "Espèces"),
+    ("other", "Autre"),
+]
+
+
+class Supplier(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=150, unique=True)
+    email = models.EmailField(blank=True, default="")
+    phone = models.CharField(max_length=30, blank=True, default="")
+    website = models.URLField(blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+
+class StockItem(models.Model):
+    """A part bought from a supplier and kept in stock (a pickup model, a set of tuners...)."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=150)
+    reference = models.CharField(max_length=100, blank=True, default="")  # supplier's reference
+    family = models.CharField(max_length=60, blank=True, default="")  # Micros, Mécaniques, Chevalets...
+    supplier = models.ForeignKey(Supplier, null=True, blank=True, on_delete=models.SET_NULL, related_name="items")
+    unit = models.CharField(max_length=20, default="pièce")
+    alert_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=0)  # warn below this, all zones
+    is_active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True, default="")
+
+    def __str__(self):
+        return f"{self.name} ({self.reference})" if self.reference else self.name
+
+
+class PurchaseInvoice(AuditMixin):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name="invoices")
+    number = models.CharField(max_length=100)
+    issued_on = models.DateField(db_index=True)
+    due_on = models.DateField(null=True, blank=True)
+    paid_on = models.DateField(null=True, blank=True)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS, blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    # the invoice itself (PDF or photo), kept in the database so it is backed up with it
+    file = models.BinaryField(null=True, blank=True, editable=False)
+    file_name = models.CharField(max_length=255, blank=True, default="")
+    file_type = models.CharField(max_length=100, blank=True, default="")
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["supplier", "number"], name="uniq_purchase_invoice_number")]
+
+    def __str__(self):
+        return f"{self.supplier} n° {self.number}"
+
+
+class PurchaseInvoiceLine(models.Model):
+    """One line of a supplier invoice. With a stock item, its quantity enters the stock at its unit price."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    invoice = models.ForeignKey(PurchaseInvoice, on_delete=models.CASCADE, related_name="lines")
+    designation = models.CharField(max_length=255)
+    category = models.CharField(max_length=20, choices=EXPENSE_CATEGORIES, default="other")
+    stock_item = models.ForeignKey(
+        StockItem, null=True, blank=True, on_delete=models.PROTECT, related_name="invoice_lines"
+    )
+    zone = models.CharField(max_length=20, choices=STOCK_ZONES, blank=True, default="")
+    quantity = models.DecimalField(max_digits=10, decimal_places=3, default=1)
+    unit_price_ht = models.DecimalField(max_digits=12, decimal_places=4)
+    vat_rate = models.DecimalField(max_digits=5, decimal_places=2, default=20)  # in %
+
+    def __str__(self):
+        return self.designation
+
+
+STOCK_MOVEMENT_KINDS = [
+    ("purchase", "Achat"),
+    ("use", "Utilisé en fabrication"),
+    ("sale", "Vendu seul"),
+    ("transfer", "Transfert"),
+    ("adjustment", "Correction d'inventaire"),
+]
+
+
+class StockMovement(AuditMixin):
+    """Stock goes in and out only through movements : the quantity in a zone is the sum of its movements."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    stock_item = models.ForeignKey(StockItem, on_delete=models.PROTECT, related_name="movements")
+    zone = models.CharField(max_length=20, choices=STOCK_ZONES)
+    kind = models.CharField(max_length=20, choices=STOCK_MOVEMENT_KINDS)
+    quantity = models.DecimalField(max_digits=10, decimal_places=3)  # positive in, negative out
+    unit_cost = models.DecimalField(max_digits=12, decimal_places=4, default=0)  # HT, at the time of the movement
+    invoice_line = models.ForeignKey(
+        PurchaseInvoiceLine, null=True, blank=True, on_delete=models.CASCADE, related_name="movements"
+    )
+    instrument = models.ForeignKey(
+        Instrument, null=True, blank=True, on_delete=models.SET_NULL, related_name="stock_movements"
+    )
+    order = models.ForeignKey(Order, null=True, blank=True, on_delete=models.SET_NULL, related_name="stock_movements")
+    note = models.CharField(max_length=255, blank=True, default="")
+    occurred_at = models.DateTimeField(db_index=True)
+
+    def __str__(self):
+        return f"{self.get_kind_display()} {self.quantity} {self.stock_item}"
+
+
+class Partner(models.Model):
+    """Business partner (shop, teacher, artist...) : a customer coming with its code or its link gets a discount,
+    and the partner earns a commission on what the customer paid (see partners/partner_service.py)."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=150)
+    email = models.EmailField(blank=True, default="")
+    phone = models.CharField(max_length=30, blank=True, default="")
+    # identity and address of who receives the money : needed for the DAS2 above 1 200 euros a year
+    company = models.CharField(max_length=150, blank=True, default="")
+    siret = models.CharField(max_length=20, blank=True, default="")
+    address = models.CharField(max_length=255, blank=True, default="")
+    # typed by the customer or carried by the link (?ref=CODE) : stored in capitals
+    code = models.CharField(max_length=40, unique=True)
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=5)
+    commission_percent = models.DecimalField(max_digits=5, decimal_places=2, default=10)
+    is_active = models.BooleanField(default=True)
+    # last day the code works (empty : no end)
+    valid_until = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
+class PartnerPayout(AuditMixin):
+    """Commission money sent to a partner."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(Partner, on_delete=models.PROTECT, related_name="payouts")
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    paid_on = models.DateField()
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS, blank=True, default="")
+    note = models.CharField(max_length=255, blank=True, default="")

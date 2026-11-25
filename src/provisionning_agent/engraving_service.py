@@ -10,23 +10,38 @@ from django.db.models import Exists, F, OuterRef
 from django.utils import timezone
 
 from haeron_guitar_api.models import EngravingTemplate, Part, PartEngravingMark
+from haeron_guitar_api.production.hidden_mark_service import pick_location
+from haeron_guitar_api.security import hidden_mark
+
+
+def _slot(part_id, mark_type, location):
+    """One mark per part and place ; the hidden code, whose place is drawn at random, once per part."""
+    return (part_id, mark_type, None if mark_type == "security" else location)
 
 
 class EngravingService:
 
     @staticmethod
     def compute_mark_value(part: Part, template: EngravingTemplate) -> str:
-        """
-        PLACEHOLDER pour mark_type="security" : à remplacer par le vrai calcul
-        (payload signé, format spécifique, etc.) avant mise en prod.
-        """
+        """Value kept with the mark. The hidden code (mark_type="security") is not kept : it is computed
+        from Vault only when it is sent to the engraving agent (see engraving_value)."""
         if template.mark_type == "serial_number":
             return part.serial_number
 
         if template.mark_type == "security":
-            return f"SEC-{part.uuid.hex[:12].upper()}"
+            return ""
 
         raise ValueError(f"Pas de règle de calcul pour mark_type={template.mark_type!r}")
+
+    @staticmethod
+    def engraving_value(mark: PartEngravingMark, keys: dict) -> str:
+        """What the agent engraves. keys : the Vault keys already read during this fetch, by part model."""
+        if mark.mark_type != "security":
+            return mark.value
+        part = mark.part
+        if part.part_model_id not in keys:
+            keys[part.part_model_id] = hidden_mark.domain_key(part.part_model_id)
+        return hidden_mark.code_from_key(part.serial_number, keys[part.part_model_id])
 
     @staticmethod
     def find_parts_missing_mark(template: EngravingTemplate):
@@ -42,9 +57,11 @@ class EngravingService:
         active_mark = PartEngravingMark.objects.filter(
             part=OuterRef("pk"),
             mark_type=template.mark_type,
-            location=template.location,
             status__in=["pending", "confirmed"],
         )
+        # the hidden code is engraved once per part, at a place drawn at random among the template's places
+        if template.mark_type != "security":
+            active_mark = active_mark.filter(location=template.location)
         return parts_qs.exclude(Exists(active_mark)).order_by("serial_number")
 
     @classmethod
@@ -68,6 +85,10 @@ class EngravingService:
         templates_qs = EngravingTemplate.objects.order_by(F("part_model").asc(nulls_last=True), "name")
         if mark_type:
             templates_qs = templates_qs.filter(mark_type=mark_type)
+        else:
+            # the hidden code only goes to the agent when asked for (--mark-type security) : it is usually engraved
+            # from the back-office, and every code sent is kept on the engraving workstation
+            templates_qs = templates_qs.exclude(mark_type="security")
         # verrou sur les templates : deux fetch simultanés (deux postes) sont
         # sérialisés au lieu de se disputer les mêmes pièces
         templates = list(templates_qs.select_for_update())  # 1 requête
@@ -91,7 +112,7 @@ class EngravingService:
         taken = set()
         for mark in existing_pending_qs:  # évalue la requête ici, une seule fois
             existing_by_template_pk[mark.template_id].append(mark)
-            taken.add((mark.part_id, mark.mark_type, mark.location))
+            taken.add(_slot(mark.part_id, mark.mark_type, mark.location))
 
         grouped = defaultdict(list)
         all_new_marks = []
@@ -108,7 +129,7 @@ class EngravingService:
                 parts_qs = parts_qs.filter(part_model_id=part_model_uuid)
 
             for part in parts_qs.iterator():  # 1 requête par template, critère d'exclusion propre au template
-                key = (part.pk, template.mark_type, template.location)
+                key = _slot(part.pk, template.mark_type, template.location)
                 if key in taken:
                     continue
                 if remaining is not None and remaining <= 0:
@@ -120,7 +141,7 @@ class EngravingService:
                     mark_type=template.mark_type,
                     template=template,
                     value=value,
-                    location=template.location,
+                    location=pick_location(template) if template.mark_type == "security" else template.location,
                     status="pending",
                 )
                 taken.add(key)
@@ -184,4 +205,4 @@ class EngravingService:
         if to_update:
             PartEngravingMark.objects.bulk_update(to_update, ["status", "description", "confirmed_at"])
 
-        return outcomes
+        return outcomes

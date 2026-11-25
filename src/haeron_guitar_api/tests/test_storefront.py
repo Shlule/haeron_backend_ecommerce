@@ -3,7 +3,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.test import RequestFactory
 
 from haeron_backend.schema import schema
-from haeron_guitar_api.models import Product, ProductType
+from haeron_guitar_api.models import Order, Product, ProductType
 
 from .product_configurator.test_configurator import starlight  # noqa: F401  (fixture)
 
@@ -19,6 +19,8 @@ CUSTOMER = {
     "address": "1 rue de la Paix",
     "postalCode": "75002",
     "city": "Paris",
+    "acceptedTerms": True,
+    "acceptedColourTerms": True,
 }
 
 
@@ -154,6 +156,17 @@ def test_place_order_closes_the_cart(case):
     assert run(CART, key=key).data["shopCart"]["count"] == 0
     shown = run("query ($id: UUID!) { shopOrder(orderId: $id) }", id=order["id"]).data["shopOrder"]
     assert shown["city"] == "Paris"
+    saved = Order.objects.get(uuid=order["id"])
+    assert saved.terms_accepted_at and saved.colour_terms_accepted_at
+
+
+@pytest.mark.parametrize("box", ["acceptedTerms", "acceptedColourTerms"])
+def test_place_order_needs_both_boxes(case, box):
+    key = run(ADD, input={"productId": str(case["strings"].uuid)}).data["addToCart"]["cartKey"]
+    result = run(ORDER, input={**CUSTOMER, box: False, "idempotencyKey": "3f2504e0-4f89-11d3-9a0c-0305e82c3303", "cartKey": key})
+    assert "accepter" in result.errors[0].message
+    assert not Order.objects.exists()
+    assert run(CART, key=key).data["shopCart"]["count"] == 1  # the cart is kept
 
 
 def test_place_order_refuses_invalid_contact(case):

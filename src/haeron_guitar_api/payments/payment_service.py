@@ -55,6 +55,18 @@ class PaymentService:
             raise ValidationError("Cette commande n'a rien à payer.")
 
         order_id = str(order.uuid)
+        extra = {}
+        if order.discount_amount:
+            # partner code : the lines keep their price, a one-off Stripe coupon takes the discount off the total
+            coupon = stripe.Coupon.create(
+                amount_off=_cents(order.discount_amount),
+                currency="eur",
+                duration="once",
+                max_redemptions=1,
+                name=f"Code {order.partner_code} (-{order.discount_percent.normalize():f} %)"[:40],
+                metadata={"order_id": order_id},
+            )
+            extra["discounts"] = [{"coupon": _get(coupon, "id")}]
         images = dict(Product.objects.filter(uuid__in={item.product_id for item in items}).values_list("uuid", "image"))
         session = stripe.checkout.Session.create(
             mode="payment",
@@ -76,6 +88,7 @@ class PaymentService:
             success_url=f"{SHOP_URL}/commande/{order_id}?paiement=ok&session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{SHOP_URL}/commande/{order_id}?paiement=annule",
             locale="fr",
+            **extra,
         )
         Payment.objects.create(
             order=order,

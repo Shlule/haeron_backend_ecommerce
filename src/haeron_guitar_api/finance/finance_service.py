@@ -6,6 +6,8 @@ from django.db.models.functions import Coalesce, TruncMonth
 from django.utils import timezone
 
 from ..models import Order, Payment
+from ..partners import partner_service
+from ..purchasing import purchasing_service
 
 ZERO = Decimal("0.00")
 # money actually received : a refunded payment was received first, then partly or fully given back
@@ -53,17 +55,28 @@ class FinanceService:
         )
         unpaid_totals = unpaid.aggregate(count=Count("pk"), amount=Coalesce(Sum("total_price"), ZERO))
 
+        end_day = date_to + timedelta(days=1) if date_to else None
+        spent = purchasing_service.expenses(date_from, end_day)
+        payouts = partner_service.payouts(date_from, end_day)
+        FinanceService._add_payouts(spent, payouts)
+        net = totals["amount"] - refunded - totals["fees"]
+
         return {
             "received": _money(totals["amount"]),
             "paymentCount": totals["count"],
             "refunded": _money(refunded),
             "fees": _money(totals["fees"]),
-            "net": _money(totals["amount"] - refunded - totals["fees"]),
+            "net": _money(net),
+            # supplier invoices issued in the period (see purchasing/purchasing_service.py)
+            "expenses": {k: v for k, v in spent.items() if k not in ("byMonth", "invoices")},
+            # what is left once the expenses are paid : money view, TTC (the accountant works out the profit HT)
+            "balance": round(_money(net) - spent["totalTtc"], 2),
+            "toPay": purchasing_service.to_pay(),
             "byProvider": {
                 row["provider"]: _money(row["amount"])
                 for row in received.values("provider").annotate(amount=Sum("amount")).order_by()
             },
-            "months": FinanceService._months(received, refunds),
+            "months": FinanceService._months(received, refunds, spent["byMonth"]),
             "unpaid": {
                 "count": unpaid_totals["count"],
                 "total": _money(unpaid_totals["amount"]),
@@ -81,16 +94,33 @@ class FinanceService:
                     for order in unpaid[:100]
                 ],
             },
-            "movements": FinanceService._movements(received, refunds),
+            "movements": FinanceService._movements(received, refunds, spent["invoices"], payouts),
         }
 
     @staticmethod
-    def _months(received, refunds):
+    def _add_payouts(spent, payouts):
+        """Commissions sent to partners are an expense like a supplier invoice (no VAT on them here)."""
+        total = sum((payout.amount for payout in payouts), ZERO)
+        if not total:
+            return
+        amount = _money(total)
+        spent["byCategory"] = sorted(
+            [*spent["byCategory"], {"category": "partners", "label": "Commissions partenaires", "ht": amount, "ttc": amount}],
+            key=lambda row: -row["ttc"],
+        )
+        spent["totalHt"] = round(spent["totalHt"] + amount, 2)
+        spent["totalTtc"] = round(spent["totalTtc"] + amount, 2)
+        for payout in payouts:
+            month = payout.paid_on.strftime("%Y-%m")
+            spent["byMonth"][month] = round(spent["byMonth"].get(month, 0.0) + _money(payout.amount), 2)
+
+    @staticmethod
+    def _months(received, refunds, expenses_by_month=None):
         months = {}
 
         def row(month):
-            key = month.strftime("%Y-%m")
-            return months.setdefault(key, {"month": key, "received": 0.0, "refunded": 0.0, "fees": 0.0})
+            key = month if isinstance(month, str) else month.strftime("%Y-%m")
+            return months.setdefault(key, {"month": key, "received": 0.0, "refunded": 0.0, "fees": 0.0, "expenses": 0.0})
 
         for item in received.annotate(month=TruncMonth("paid_at")).values("month").annotate(
             amount=Sum("amount"), fees=Sum("fee")
@@ -100,12 +130,15 @@ class FinanceService:
             amount=Sum("refunded_amount")
         ).order_by():
             row(item["month"])["refunded"] = _money(item["amount"])
+        for month, amount in (expenses_by_month or {}).items():
+            row(month)["expenses"] = amount
         for month in months.values():
             month["net"] = round(month["received"] - month["refunded"] - month["fees"], 2)
+            month["balance"] = round(month["net"] - month["expenses"], 2)
         return sorted(months.values(), key=lambda m: m["month"])
 
     @staticmethod
-    def _movements(received, refunds):
+    def _movements(received, refunds, invoices=(), payouts=()):
         """Every line of money in or out, newest first : what the accountant needs in the export."""
         movements = []
 
@@ -130,4 +163,32 @@ class FinanceService:
                 line(payment, "fee", payment.paid_at, -payment.fee, "Frais Stripe")
         for payment in refunds.select_related("order")[:5000]:
             line(payment, "refund", payment.refunded_at, -payment.refunded_amount, "Remboursement")
+        for invoice in invoices:
+            movements.append(
+                {
+                    "date": invoice["date"],
+                    "kind": "expense",
+                    "label": f"Facture {invoice['supplier']} n° {invoice['number']}",
+                    "provider": "",
+                    "orderId": "",
+                    "invoiceId": invoice["id"],
+                    "reference": invoice["number"],
+                    "customer": invoice["supplier"],
+                    "amount": -invoice["ttc"],
+                }
+            )
+        for payout in payouts:
+            movements.append(
+                {
+                    "date": payout.paid_on.isoformat(),
+                    "kind": "commission",
+                    "label": f"Commission partenaire {payout.partner.name}",
+                    "provider": payout.payment_method,
+                    "orderId": "",
+                    "partnerId": str(payout.partner_id),
+                    "reference": payout.partner.code,
+                    "customer": payout.partner.name,
+                    "amount": -_money(payout.amount),
+                }
+            )
         return sorted(movements, key=lambda m: m["date"], reverse=True)

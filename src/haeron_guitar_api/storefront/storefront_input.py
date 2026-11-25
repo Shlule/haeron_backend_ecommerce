@@ -37,3 +37,8 @@ class PlaceOrderInput:
     country: str = "FR"
     phone: str = ""
     cart_key: Optional[str] = None
+    # the two boxes ticked on the checkout page (CGV, then colours and configuration choices)
+    accepted_terms: bool = False
+    accepted_colour_terms: bool = False
+    # partner code typed at checkout or kept from a partner link (?ref=CODE)
+    partner_code: str = ""

@@ -40,7 +40,7 @@ class OrderService:
     @staticmethod
     def detail(order_uuid):
         order = (
-            Order.objects.prefetch_related(
+            Order.objects.select_related("partner").prefetch_related(
                 Prefetch("order_items", queryset=OrderItem.objects.order_by("pk")),
                 Prefetch("payments", queryset=Payment.objects.order_by("created_at")),
                 # what the workshop delivers for each line
@@ -66,7 +66,22 @@ class OrderService:
             "address": order.address,
             "postalCode": order.postal_code,
             "country": order.country,
+            "termsAcceptedAt": order.terms_accepted_at.isoformat() if order.terms_accepted_at else None,
+            "colourTermsAcceptedAt": order.colour_terms_accepted_at.isoformat() if order.colour_terms_accepted_at else None,
             "userId": str(order.user_id) if order.user_id else None,
+            # partner code used : discount given, and the partner who earns a commission (see partners/)
+            "partner": (
+                {
+                    "id": str(order.partner_id),
+                    "name": order.partner.name,
+                    "code": order.partner_code,
+                    "discountPercent": float(order.discount_percent),
+                    "discount": float(order.discount_amount),
+                    "commissionPercent": float(order.commission_percent),
+                }
+                if order.partner_id
+                else None
+            ),
             # Stripe pages left without paying are not shown
             "payments": [PaymentService.serialize(payment) for payment in payments if payment.status not in unpaid],
             # not paid yet : the link to give the customer, and how many Stripe pages were opened without paying

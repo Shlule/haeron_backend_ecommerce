@@ -24,6 +24,7 @@ from ..models import (
     OrderItem,
     Part,
     PartBatch,
+    PartEngravingMark,
     PartHistory,
     PartModel,
     PartModelOption,
@@ -31,6 +32,8 @@ from ..models import (
     SALE_STATUSES,
 )
 from ..part.part_service import PartService
+from ..security import hidden_mark
+from . import hidden_mark_service
 from ..partBatch.partBatch_service import PartBatchService
 from . import order_lines
 
@@ -797,6 +800,11 @@ class ProductionService:
             .prefetch_related(
                 Prefetch("history", queryset=PartHistory.objects.select_related("created_by")),
                 Prefetch("part_identities", queryset=PartNFCIdentity.objects.select_related("batch").order_by("-created_at")),
+                Prefetch(
+                    "security_marks",
+                    queryset=PartEngravingMark.objects.filter(mark_type="security").order_by("-created_at"),
+                    to_attr="hidden_marks",
+                ),
             )
             .filter(pk=part_id)
             .first()
@@ -807,7 +815,34 @@ class ProductionService:
             **ProductionService._part_row(part),
             "identities": [ProductionService._identity(i) for i in part.part_identities.all()],
             "history": [ProductionService._event(e) for e in part.history.all()],
+            # place of the hidden code already known (from the engraving agent), else written when the engraving is checked
+            "hiddenMarkLocation": hidden_mark_service.location_to_show(part, part.hidden_marks),
+            # places proposed in that free field (from the "security" engraving template)
+            "hiddenMarkSuggestions": hidden_mark_service.suggestions(part),
+            # where and when the hidden code was engraved ; the code itself is never shown
+            "hiddenMarks": [
+                {
+                    "location": mark.location,
+                    "status": mark.status,
+                    "confirmedAt": mark.confirmed_at.isoformat() if mark.confirmed_at else None,
+                }
+                for mark in part.hidden_marks
+            ],
         }
+
+    @staticmethod
+    def check_hidden_mark(part_id, code):
+        """Says whether the code read on the part is its hidden code (to check a part whose NFC tag no longer works)."""
+        part = Part.objects.filter(pk=part_id).first()
+        if part is None:
+            raise ValidationError("Pièce introuvable.")
+        if not hidden_mark.normalize(code or ""):
+            raise ValidationError("Saisis le code lu sur la pièce.")
+        try:
+            match = hidden_mark.matches(part, code)
+        except Exception as error:
+            raise ValidationError(f"Clé du modèle illisible dans Vault ({error.__class__.__name__}).") from error
+        return {"match": match, "serialNumber": part.serial_number}
 
     @staticmethod
     def _identity(identity):
