@@ -314,6 +314,11 @@ def _resource_description(resource):
             description["relation"] = field.related_model.__name__
         if getattr(field, "max_length", None):
             description["maxLength"] = field.max_length
+        # the model's own default (a switch on by default, a quantity...) prefills the creation form
+        if field.has_default() and not callable(field.default) and isinstance(field.default, (bool, int, float, str)):
+            description["default"] = field.default
+        elif isinstance(field, models.DecimalField) and field.has_default() and not callable(field.default):
+            description["default"] = float(field.default)
         fields.append(description)
     return {
         "name": resource.name,
