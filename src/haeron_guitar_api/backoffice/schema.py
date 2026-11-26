@@ -474,6 +474,8 @@ class BoPurchaseLineInput:
     zone: str = ""
     quantity: decimal.Decimal = decimal.Decimal("1")
     vat_rate: decimal.Decimal = decimal.Decimal("20")
+    # pieces made by the factory and paid by this line (serial numbered, already created)
+    part_ids: list[uuid.UUID] = strawberry.field(default_factory=list)
 
 
 @strawberry.input
@@ -568,6 +570,25 @@ def _instrument_stock_parts(instrument_id: uuid.UUID) -> JSON:
     return StockService.instrument_cost(instrument_id)
 
 
+def _parts_without_invoice(search: Optional[str] = None) -> JSON:
+    return PurchasingService.parts_without_invoice((search or "").strip() or None)
+
+
+def _link_parts_to_invoice_line(info: strawberry.Info, line_id: uuid.UUID, part_ids: list[uuid.UUID]) -> JSON:
+    """Pieces made by an outside factory, paid by this invoice line : returns the invoice."""
+    return _production(lambda: PurchasingService.link_parts(line_id, part_ids, _staff_user(info)))
+
+
+def _unlink_part_invoice(info: strawberry.Info, part_id: uuid.UUID) -> JSON:
+    """The piece is no longer paid by its invoice line : returns the piece's sheet."""
+
+    def unlink():
+        PurchasingService.unlink_part(part_id, _staff_user(info))
+        return ProductionService.part_sheet(part_id)
+
+    return _production(unlink)
+
+
 def _save_stock_item(info: strawberry.Info, data: BoStockItemInput, item_id: Optional[uuid.UUID] = None) -> JSON:
     payload = strawberry.asdict(data)
     return _production(lambda: StockService.save_item(item_id, payload, _staff_user(info)))
@@ -581,6 +602,15 @@ def _move_stock(info: strawberry.Info, data: BoStockMoveInput) -> JSON:
 _query_fields["purchasing_form"] = strawberry.field(resolver=_purchasing_form)
 _query_fields["purchase_invoices"] = strawberry.field(resolver=_purchase_invoices, permission_classes=_finance_permissions)
 _query_fields["purchase_invoice"] = strawberry.field(resolver=_purchase_invoice, permission_classes=_finance_permissions)
+_query_fields["parts_without_invoice"] = strawberry.field(
+    resolver=_parts_without_invoice, permission_classes=_finance_permissions
+)
+_mutation_fields["link_parts_to_invoice_line"] = strawberry.mutation(
+    resolver=_link_parts_to_invoice_line, permission_classes=_finance_permissions
+)
+_mutation_fields["unlink_part_invoice"] = strawberry.mutation(
+    resolver=_unlink_part_invoice, permission_classes=_finance_permissions
+)
 _query_fields["stock"] = strawberry.field(resolver=_stock)
 _query_fields["stock_item_sheet"] = strawberry.field(resolver=_stock_item_sheet)
 _query_fields["instrument_stock_parts"] = strawberry.field(resolver=_instrument_stock_parts)

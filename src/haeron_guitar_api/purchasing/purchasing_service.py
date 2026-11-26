@@ -4,6 +4,8 @@
   (zone "Atelier" or "Vente") at its unit price ; the other lines are plain expenses (tools, shipping, rent...).
 - The stock only changes through movements : purchase, use in an instrument, sale of the item alone, transfer between
   the zones, inventory correction. The quantity in a zone is the sum of its movements.
+- A line that is not a stock item can pay for pieces made by an outside factory (serial numbered parts) : each
+  piece linked to it cost the line's unit price.
 - The cost of an item is the weighted average of what it was bought for (HT) ; a movement out keeps the cost of the
   day, so the cost of an instrument does not change when prices change later.
 """
@@ -23,6 +25,7 @@ from ..models import (
     STOCK_MOVEMENT_KINDS,
     STOCK_ZONES,
     Instrument,
+    Part,
     PurchaseInvoice,
     PurchaseInvoiceLine,
     StockItem,
@@ -142,7 +145,7 @@ class PurchasingService:
     def invoice(invoice_id):
         invoice = (
             PurchaseInvoice.objects.select_related("supplier")
-            .prefetch_related("lines__stock_item")
+            .prefetch_related("lines__stock_item", "lines__parts__part_model")
             .defer("file")
             .filter(pk=invoice_id)
             .first()
@@ -167,10 +170,68 @@ class PurchasingService:
                     "unitPriceHt": _number(line.unit_price_ht),
                     "vatRate": _number(line.vat_rate),
                     "totalHt": _money(line_totals(line)[0]),
+                    # pieces made by the factory and paid by this line (not for a line bringing a stock item)
+                    "canHoldParts": line.stock_item_id is None,
+                    "parts": [
+                        {"id": str(p.uuid), "serialNumber": p.serial_number, "partModel": p.part_model.name}
+                        for p in sorted(line.parts.all(), key=lambda p: p.serial_number)
+                    ],
                 }
                 for line in lines
             ],
         }
+
+    # --- pieces made by an outside factory, paid by an invoice line ---
+
+    @staticmethod
+    @transaction.atomic
+    def link_parts(line_id, part_ids, user=None):
+        """The line paid for these pieces : each one cost its unit price. A line holds as many pieces as its quantity."""
+        line = PurchaseInvoiceLine.objects.select_for_update().filter(pk=line_id).first()
+        if line is None:
+            raise ValidationError("Ligne de facture introuvable.")
+        if line.stock_item_id:
+            raise ValidationError("Cette ligne fait entrer un article en stock : elle ne paie pas des pièces fabriquées.")
+        part_ids = list(dict.fromkeys(part_ids or []))
+        if not part_ids:
+            raise ValidationError("Choisis les pièces payées par cette ligne.")
+        parts = list(Part.objects.select_for_update().filter(uuid__in=part_ids))
+        if len(parts) != len(part_ids):
+            raise ValidationError("Une des pièces choisies n'existe plus.")
+        for part in parts:
+            if part.purchase_line_id and part.purchase_line_id != line.pk:
+                raise ValidationError(f"La pièce {part.serial_number} est déjà associée à une autre facture.")
+        count = Part.objects.filter(purchase_line=line).exclude(uuid__in=part_ids).count() + len(parts)
+        if count > line.quantity:
+            raise ValidationError(
+                f"Cette ligne paie {_number(line.quantity):g} pièce(s) : {count} pièces ne peuvent pas y être associées."
+            )
+        Part.objects.filter(uuid__in=part_ids).update(purchase_line=line, updated_by=user, updated_at=timezone.now())
+        return PurchasingService.invoice(line.invoice_id)
+
+    @staticmethod
+    @transaction.atomic
+    def unlink_part(part_id, user=None):
+        part = Part.objects.select_for_update().filter(pk=part_id).first()
+        if part is None:
+            raise ValidationError("Pièce introuvable.")
+        invoice_id = part.purchase_line.invoice_id if part.purchase_line_id else None
+        part.purchase_line = None
+        part.updated_by = user
+        part.save(update_fields=["purchase_line", "updated_by", "updated_at"])
+        return invoice_id
+
+    @staticmethod
+    def parts_without_invoice(search=None, limit=200):
+        """Pieces no invoice paid for yet, newest first : to pick the ones a factory invoice is for."""
+        rows = Part.objects.select_related("part_model").filter(purchase_line__isnull=True)
+        if search:
+            rows = rows.filter(Q(serial_number__icontains=search) | Q(part_model__name__icontains=search))
+        return [
+            {"id": str(p.uuid), "serialNumber": p.serial_number, "partModel": p.part_model.name}
+            for p in rows.order_by("-created_at")[: max(1, min(limit, 500))]
+        ]
+
 
     @staticmethod
     @transaction.atomic
@@ -201,6 +262,9 @@ class PurchasingService:
         for index, raw in enumerate(lines, start=1):
             line = _line(invoice, raw, index)
             line.save()
+            if raw.get("part_ids"):
+                # pieces made by the factory, received with this invoice : each one cost the line's unit price
+                PurchasingService.link_parts(line.uuid, raw["part_ids"], user)
             if line.stock_item_id:
                 StockMovement.objects.create(
                     stock_item_id=line.stock_item_id,
@@ -596,3 +660,22 @@ def to_pay():
     invoices = PurchaseInvoice.objects.filter(paid_on__isnull=True).select_related("supplier").prefetch_related("lines").defer("file")
     rows = [_invoice_row(i) for i in invoices.order_by("due_on", "issued_on")]
     return {"count": len(rows), "total": _money(sum(Decimal(str(r["totalTtc"])) for r in rows)), "invoices": rows[:100]}
+
+
+def part_cost(part):
+    """What a piece cost, from the invoice line that paid for it (None : no invoice yet).
+    The part must come with purchase_line__invoice__supplier (select_related)."""
+    line = part.purchase_line
+    if line is None:
+        return None
+    ht = line.unit_price_ht.quantize(CENT, ROUND_HALF_UP)
+    vat = (ht * line.vat_rate / 100).quantize(CENT, ROUND_HALF_UP)
+    return {
+        "invoiceId": str(line.invoice_id),
+        "supplier": line.invoice.supplier.name,
+        "number": line.invoice.number,
+        "issuedOn": line.invoice.issued_on.isoformat(),
+        "line": line.designation,
+        "unitHt": _money(ht),
+        "unitTtc": _money(ht + vat),
+    }

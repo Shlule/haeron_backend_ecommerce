@@ -164,6 +164,10 @@ class Part(AuditMixin):
         default=dict,
         blank=True,
     )
+    # supplier invoice line that paid for this piece (made by an outside factory) : what it cost
+    purchase_line = models.ForeignKey(
+        "PurchaseInvoiceLine", null=True, blank=True, on_delete=models.SET_NULL, related_name="parts"
+    )
 
 
 class PartEngravingMark(models.Model):
@@ -585,6 +589,7 @@ class ConfigurationResult(models.Model):
 
 EXPENSE_CATEGORIES = [
     ("components", "Composants achetés"),
+    ("manufacturing", "Pièces fabriquées (usine)"),
     ("materials", "Bois et matières"),
     ("tools", "Outillage et machines"),
     ("shipping", "Transport et emballage"),

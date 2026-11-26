@@ -37,6 +37,7 @@ from . import hidden_mark_service
 from ..partBatch.partBatch_service import PartBatchService
 from . import order_lines
 from .equipment_service import EquipmentService
+from ..purchasing.purchasing_service import StockService, part_cost
 
 EVENT_TYPES = [
     ("fabrication", "Fabrication"),
@@ -699,6 +700,8 @@ class ProductionService:
             "owner": part.owner.email if part.owner else None,
             # piece sold alone : its order line (a mounted part follows its instrument's order)
             "order": order_lines.serialize(part.order_item) if part.order_item_id else None,
+            # what it cost : the supplier invoice line that paid the factory for it
+            "purchase": part_cost(part),
         }
 
     @staticmethod
@@ -738,7 +741,9 @@ class ProductionService:
 
     @staticmethod
     def instrument_sheet(instrument_id):
-        parts = Part.objects.select_related("part_model__part_type", "batch", "owner").order_by("-is_master", "created_at")
+        parts = Part.objects.select_related(
+            "part_model__part_type", "batch", "owner", "purchase_line__invoice__supplier"
+        ).order_by("-is_master", "created_at")
         instrument = (
             Instrument.objects.select_related("instrument_model__instrument_type", "master_part", "owner", "order_item__order")
             .prefetch_related(
@@ -771,13 +776,35 @@ class ProductionService:
             "createdAt": instrument.created_at.isoformat(),
             "parts": [ProductionService._part_row(part) for part in part_list],
             "equipment": EquipmentService.rows(instrument.uuid),
+            "costs": ProductionService._costs(instrument.uuid, part_list),
             "history": history,
+        }
+
+    @staticmethod
+    def _costs(instrument_id, part_list):
+        """What the instrument cost : its pieces paid to the factory (invoices) and the bought pieces taken out of
+        the workshop stock. Pieces with no invoice yet are counted apart."""
+        costs = [part_cost(part) for part in part_list]
+        known = [c for c in costs if c]
+        stock = StockService.instrument_cost(instrument_id)["total"]
+        parts_ht = round(sum(c["unitHt"] for c in known), 2)
+        return {
+            "partsHt": parts_ht,
+            "partsTtc": round(sum(c["unitTtc"] for c in known), 2),
+            "partsWithoutInvoice": len(costs) - len(known),
+            "stockHt": stock,
+            "totalHt": round(parts_ht + stock, 2),
         }
 
     @staticmethod
     def parts(offset=0, limit=50, search=None, free_only=False, status=None):
         rows = Part.objects.select_related(
-            "part_model__part_type", "batch", "owner", "instrument__instrument_model", "order_item__order"
+            "part_model__part_type",
+            "batch",
+            "owner",
+            "instrument__instrument_model",
+            "order_item__order",
+            "purchase_line__invoice__supplier",
         )
         if free_only:
             rows = rows.filter(instrument__isnull=True)
@@ -801,7 +828,12 @@ class ProductionService:
     def part_sheet(part_id):
         part = (
             Part.objects.select_related(
-                "part_model__part_type", "batch", "owner", "instrument__instrument_model", "order_item__order"
+                "part_model__part_type",
+                "batch",
+                "owner",
+                "instrument__instrument_model",
+                "order_item__order",
+                "purchase_line__invoice__supplier",
             )
             .prefetch_related(
                 Prefetch("history", queryset=PartHistory.objects.select_related("created_by")),
