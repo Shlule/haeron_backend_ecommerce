@@ -20,6 +20,14 @@ from ..security import hidden_mark
 
 
 GENERIC_TEMPLATE = "Code caché - toutes pièces"
+# history of the hidden code : kept for the workshop, never shown on the public certificate
+SHOWN_TITLE = "Code caché affiché pour gravure"
+CHECKED_TITLE = "Code caché gravé et contrôlé"
+
+
+def is_private_event(title):
+    """History events about the hidden code (where it is engraved) stay out of the public certificate."""
+    return (title or "").lower().startswith("code caché")
 
 
 def template_for(part):
@@ -107,7 +115,7 @@ class HiddenMarkService:
         PartHistory.objects.create(
             part=part,
             event_type="fabrication",
-            title="Code caché affiché pour gravure",
+            title=SHOWN_TITLE,
             description="",
             created_by=user,
             updated_by=user,
@@ -140,7 +148,7 @@ class HiddenMarkService:
         PartHistory.objects.create(
             part=part,
             event_type="controle",
-            title="Code caché gravé et contrôlé",
+            title=CHECKED_TITLE,
             description=f"Emplacement : {mark.location}. Code relu sur la pièce et vérifié.",
             created_by=user,
             updated_by=user,

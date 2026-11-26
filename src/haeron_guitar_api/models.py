@@ -741,3 +741,42 @@ class PartnerPayout(AuditMixin):
     paid_on = models.DateField()
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS, blank=True, default="")
     note = models.CharField(max_length=255, blank=True, default="")
+
+
+# what is mounted on an instrument besides its manufactured parts (bought hardware : not serial numbered)
+EQUIPMENT_SLOTS = [
+    ("mecaniques", "Mécaniques"),
+    ("micros", "Micros"),
+    ("chevalet", "Chevalet"),
+    ("selecteur", "Sélecteur"),
+    ("potentiometres", "Potentiomètres"),
+    ("jack", "Jack"),
+    ("autre", "Autre"),
+]
+
+
+class InstrumentEquipment(AuditMixin):
+    """One piece of hardware mounted on an instrument (a pickup, a set of tuners...). A replaced or removed one is
+    kept with its removal date : the instrument's rows tell what it carries now and what it carried before."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    instrument = models.ForeignKey(Instrument, on_delete=models.CASCADE, related_name="equipment")
+    slot = models.CharField(max_length=20, choices=EQUIPMENT_SLOTS)
+    name = models.CharField(max_length=255)
+    # where it comes from : the order configuration (catalogue product) and/or the workshop stock
+    product = models.ForeignKey(Product, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    stock_item = models.ForeignKey(StockItem, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    stock_movement = models.ForeignKey(
+        StockMovement, null=True, blank=True, on_delete=models.SET_NULL, related_name="equipment"
+    )
+    from_order = models.BooleanField(default=False)
+    note = models.CharField(max_length=255, blank=True, default="")
+    installed_at = models.DateTimeField()
+    removed_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    removal_note = models.CharField(max_length=255, blank=True, default="")
+
+    class Meta:
+        ordering = ["installed_at"]
+
+    def __str__(self):
+        return f"{self.get_slot_display()} : {self.name}"

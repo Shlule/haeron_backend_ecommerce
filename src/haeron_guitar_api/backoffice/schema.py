@@ -28,6 +28,7 @@ from authUser.permission.permission import HasRole, IsAuthenticated
 from ..finance.finance_service import FinanceService
 from ..order.order_service import OrderService
 from ..payments.payment_service import PaymentService
+from ..production.equipment_service import EquipmentService
 from ..production.hidden_mark_service import HiddenMarkService
 from ..partners.partner_service import PartnerService
 from ..purchasing.purchasing_service import PurchasingService, StockService
@@ -1143,6 +1144,68 @@ _mutation_fields["add_history_event"] = strawberry.mutation(resolver=_add_histor
 _mutation_fields["delete_history_event"] = strawberry.mutation(resolver=_delete_history_event)
 _mutation_fields["set_production_status"] = strawberry.mutation(resolver=_set_production_status)
 _add_mutation("link_production_order", _link_production_order)
+
+
+# --- equipment of an instrument : bought hardware mounted on it (tuners, pickups, bridge, selector, pots, jack) ---
+
+
+@strawberry.input
+class BoEquipmentInput:
+    slot: str = ""
+    name: str = ""
+    # taken out of the workshop stock (its cost goes to the instrument)
+    stock_item_id: Optional[uuid.UUID] = None
+    quantity: Optional[decimal.Decimal] = None
+    # mounted in place of this row (kept, with its removal date)
+    replaces_id: Optional[uuid.UUID] = None
+    note: str = ""
+
+
+def _equipment_slots() -> JSON:
+    return EquipmentService.slots()
+
+
+def _mount_equipment(info: strawberry.Info, instrument_id: uuid.UUID, data: BoEquipmentInput) -> JSON:
+    payload = strawberry.asdict(data)
+
+    def mount():
+        EquipmentService.mount(instrument_id, payload, _staff_user(info))
+        return ProductionService.instrument_sheet(instrument_id)
+
+    return _production(mount)
+
+
+def _take_equipment_from_stock(
+    info: strawberry.Info, equipment_id: uuid.UUID, stock_item_id: uuid.UUID, quantity: Optional[decimal.Decimal] = None
+) -> JSON:
+    def take():
+        row = EquipmentService.take_from_stock(equipment_id, stock_item_id, quantity, _staff_user(info))
+        return ProductionService.instrument_sheet(row.instrument_id)
+
+    return _production(take)
+
+
+def _remove_equipment(info: strawberry.Info, equipment_id: uuid.UUID, note: str = "") -> JSON:
+    def remove():
+        row = EquipmentService.remove(equipment_id, note, _staff_user(info))
+        return ProductionService.instrument_sheet(row.instrument_id)
+
+    return _production(remove)
+
+
+def _fill_equipment_from_order(info: strawberry.Info, instrument_id: uuid.UUID) -> JSON:
+    def fill():
+        EquipmentService.fill_from_order_of(instrument_id, _staff_user(info))
+        return ProductionService.instrument_sheet(instrument_id)
+
+    return _production(fill)
+
+
+_query_fields["equipment_slots"] = strawberry.field(resolver=_equipment_slots)
+_add_mutation("mount_equipment", _mount_equipment)
+_add_mutation("take_equipment_from_stock", _take_equipment_from_stock)
+_add_mutation("remove_equipment", _remove_equipment)
+_add_mutation("fill_equipment_from_order", _fill_equipment_from_order)
 
 
 BackofficeQueries = strawberry.type(type("BackofficeQueries", (), {"__module__": __name__, **_query_fields}))

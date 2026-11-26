@@ -59,12 +59,11 @@ class PartBatchDTO:
     status: str
 
 @dataclass(slots=True)
-class SecurityMarkDTO:
-    uuid: str
-    mark_type: str
-    value: str
-    location: Optional[str]
-    description: Optional[str]
+class EquipmentDTO:
+    """A bought piece mounted on the instrument now (tuners, pickups...) : no serial number."""
+    slot: str
+    label: str
+    name: str
 
 @dataclass(slots=True)
 class UserSummaryDTO:
@@ -107,7 +106,7 @@ class PartIdentityDTO:
 
     options: list["PartOptionSelectionDTO"] = field(default_factory=list)
 
-    security_marks: list["SecurityMarkDTO"] = field(default_factory=list)
+    # the security marks (hidden code and where it is) are never sent : the certificate is public
 
     history: list["PartHistoryDTO"] = field(default_factory=list)
 
@@ -135,5 +134,7 @@ class InstrumentDTO:
     serial_number: Optional[str]
 
     parts: list["PartIdentityDTO"] = field(default_factory=list)
+
+    equipment: list["EquipmentDTO"] = field(default_factory=list)
 
     history: list["InstrumentHistoryDTO"] = field(default_factory=list)

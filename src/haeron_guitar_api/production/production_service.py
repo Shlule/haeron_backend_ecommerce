@@ -36,6 +36,7 @@ from ..security import hidden_mark
 from . import hidden_mark_service
 from ..partBatch.partBatch_service import PartBatchService
 from . import order_lines
+from .equipment_service import EquipmentService
 
 EVENT_TYPES = [
     ("fabrication", "Fabrication"),
@@ -421,6 +422,8 @@ class ProductionService:
                 for part in parts
             ]
         )
+        # the bought pieces of the order (tuners, pickups...) are written on it
+        EquipmentService.fill_from_order(instrument, user)
         if status != "in_stock":
             ProductionService._apply_status(instrument, status, _order_note(item), user)
         return ProductionService.instrument_sheet(instrument.uuid)
@@ -489,6 +492,8 @@ class ProductionService:
             if isinstance(obj, Instrument):
                 Part.objects.filter(instrument=obj).update(owner=order.user)
         obj.save(update_fields=fields)
+        if isinstance(obj, Instrument):
+            EquipmentService.fill_from_order(obj, user)
         note = _order_note(item)
         if obj.status != "sold":
             ProductionService._apply_status(obj, "sold", note, user)
@@ -765,6 +770,7 @@ class ProductionService:
             "order": order_lines.serialize(instrument.order_item),
             "createdAt": instrument.created_at.isoformat(),
             "parts": [ProductionService._part_row(part) for part in part_list],
+            "equipment": EquipmentService.rows(instrument.uuid),
             "history": history,
         }
 
