@@ -1,0 +1,7 @@
+{% autoescape off %}Bonjour,
+
+{% block content %}{% endblock content %}
+
+À bientôt,
+Haeron Guitars
+{% endautoescape %}

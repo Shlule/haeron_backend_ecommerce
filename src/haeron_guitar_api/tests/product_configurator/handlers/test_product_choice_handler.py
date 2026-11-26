@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pytest
 from django.core.exceptions import ValidationError
 
@@ -22,7 +24,8 @@ def test_product_choice_valid(product, choice_component):
     result = handler.resolve(choice_component, {"product_id": str(chosen.uuid)})
 
     assert result["product_id"] == str(chosen.uuid)
-    assert result["price"] == float(chosen.price)
+    # the snapshot keeps the exact amount as text (money is never a float)
+    assert Decimal(result["price"]) == chosen.price
 
 
 @pytest.mark.django_db

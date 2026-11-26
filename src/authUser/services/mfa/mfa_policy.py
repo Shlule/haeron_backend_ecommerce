@@ -15,20 +15,12 @@ def user_has_mfa(user):
 
 
 def get_mfa_status(user):
+    # MFA set up (by choice for a customer, imposed for staff): the code is always asked
+    if user_has_mfa(user):
+        return MFAStatus.REQUIRED
 
-    # Cas 1
-    # Le rôle n'impose pas MFA
-
-    if not user_requires_mfa(user):
-        return MFAStatus.NOT_REQUIRED
-
-    # Cas 2
-    # MFA obligatoire mais jamais configuré
-
-    if not user_has_mfa(user):
+    # the role imposes MFA but it was never set up
+    if user_requires_mfa(user):
         return MFAStatus.SETUP_REQUIRED
 
-    # Cas 3
-    # MFA existe, attente du code
-
-    return MFAStatus.REQUIRED
+    return MFAStatus.NOT_REQUIRED

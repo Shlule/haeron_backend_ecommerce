@@ -32,7 +32,8 @@ def test_custompiece_valid(product, custom_component, part_model):
     handler = CustomPieceHandler()
     configuration = {"part_model_id": str(part_model.uuid)}
     result = handler.resolve(custom_component, configuration, product=product)
-    assert result["price"] == float(part_model.price)
+    # the snapshot keeps the exact amount as text (money is never a float)
+    assert Decimal(result["price"]) == part_model.price
 
 
 @pytest.mark.django_db
@@ -56,7 +57,7 @@ def test_custompiece_valid_with_options(product, custom_component, part_model, p
         str(selected_option_materiaux.uuid),
     }
 
-    assert result["price"] == float(
+    assert Decimal(result["price"]) == (
         part_model.price + selected_option_color.price_delta + selected_option_materiaux.price_delta
     )
 

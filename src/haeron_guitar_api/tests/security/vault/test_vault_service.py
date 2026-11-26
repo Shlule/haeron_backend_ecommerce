@@ -12,8 +12,18 @@ from haeron_guitar_api.security.vault.vault_client import VaultClient
 
 @pytest.fixture
 def vault_client():
-    client = VaultClient()
+    """In-memory Vault : the service is tested without a Vault server (write_secret stays a mock to inspect)."""
+    stored = {}
+    client = MagicMock(spec=VaultClient)
+    client.generate_key.side_effect = lambda: secrets.token_bytes(32)
+    client.write_secret.side_effect = lambda path, secret: stored.__setitem__(path, secret)
 
+    def read_secret(path):
+        if path not in stored:
+            raise VaultSecretNotFound(path)
+        return stored[path]
+
+    client.read_secret.side_effect = read_secret
     return client
 
 
@@ -38,7 +48,7 @@ def test_should_build_batch_path(vault_service):
         batch_id="batch-001",
     )
 
-    assert path == ("secret/batch/part-batch/body-strat/batch/batch-001")
+    assert path == "secret/batch/part-model/body-strat/batch/batch-001"
 
 
 def test_should_raise_when_secret_type_is_unknown(vault_service):

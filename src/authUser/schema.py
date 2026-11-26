@@ -2,7 +2,7 @@ import strawberry
 from strawberry.types import Info
 from django.contrib.auth import get_user_model
 
-from .types import UserType
+from .types import AccountType
 
 from .input import SignupInput
 
@@ -18,7 +18,8 @@ from .services.signup import signup_customer, signup_user_with_role
 from .services.auth import login_user
 from .services.tokens import generate_tokens, revoke_refresh_token, refresh_access_token
 from .services.password import request_password_reset, confirm_password_reset
-from .services.mfa.mfa_policy import get_mfa_status
+from .services.mfa.mfa_policy import user_has_mfa, user_requires_mfa
+from .services import account
 from .services.mfa.mfa import verify_totp, start_totp_setup, confirm_totp_setup
 from .services.mfa.mfa_challenge import delete_challenge, get_user_from_challenge
 
@@ -44,11 +45,21 @@ class SetupMfaType:
 
 
 
+def account_of(user) -> AccountType:
+    return AccountType(
+        username=user.username,
+        email=user.email,
+        pending_email=account.pending_email(user),
+        mfa_enabled=user_has_mfa(user),
+        mfa_required=user_requires_mfa(user),
+    )
+
+
 @strawberry.type
 class UserQuery:
-    @strawberry.field
-    def getAllUser(self, info: Info) -> list[UserType]:
-        return User.objects.all()
+    @strawberry.field(permission_classes=[IsAuthenticated])
+    def me(self, info: Info) -> AccountType:
+        return account_of(info.context["request"].user)
 
 
 @strawberry.type
@@ -113,8 +124,8 @@ class UserMutation:
         return TokenType(**tokens)
 
     @strawberry.mutation
-    def confirm_password_reset(self, uid: str, key: str, new_password: str) -> bool:
-        return confirm_password_reset(uid=uid, key=key, new_password=new_password)
+    def confirm_password_reset(self, key: str, new_password: str, password_confirmation: str) -> bool:
+        return confirm_password_reset(key=key, new_password=new_password, password_confirmation=password_confirmation)
 
     @strawberry.mutation
     def resend_verification_email(self, info: Info, email: str) -> bool:
@@ -167,7 +178,42 @@ class UserMutation:
 
         return TokenType(**tokens)
 
-   
+    # ===========================================
+    # Mon compte (logged-in user)
+    # ===========================================
+
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
+    def update_username(self, info: Info, username: str) -> AccountType:
+        return account_of(account.update_username(info.context["request"].user, username))
+
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
+    def change_password(self, info: Info, current_password: str, new_password: str, password_confirmation: str) -> TokenType:
+        tokens = account.change_password(info.context["request"].user, current_password, new_password, password_confirmation)
+        return TokenType(**tokens)
+
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
+    def change_email(self, info: Info, password: str, email: str, email_confirmation: str) -> AccountType:
+        request = info.context["request"]
+        account.request_email_change(request, request.user, password, email, email_confirmation)
+        return account_of(request.user)
+
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
+    def start_account_mfa(self, info: Info) -> SetupMfaType:
+        data = account.start_mfa_setup(info.context["request"].user)
+        return SetupMfaType(secret=data["secret"], otp_auth_url=data["otp_auth_url"])
+
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
+    def enable_account_mfa(self, info: Info, code: str) -> AccountType:
+        user = info.context["request"].user
+        account.enable_mfa(user, code)
+        return account_of(user)
+
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
+    def disable_account_mfa(self, info: Info, code: str) -> AccountType:
+        user = info.context["request"].user
+        account.remove_mfa(user, code)
+        return account_of(user)
+
 
 UserMutation = UserMutation
 UserQuery = UserQuery

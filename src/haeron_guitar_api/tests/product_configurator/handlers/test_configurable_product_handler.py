@@ -33,19 +33,6 @@ class FakeHandler:
 
 
 @pytest.mark.django_db
-def test_guitar_scenario(product, custom_component, fixed_component, choice_component):
-
-    handler = ComponentHandlerRegistry.get_handler("product_configurable")
-    product = (
-        Product.objects.select_related("product_schema")
-        .prefetch_related("product_schema__product_components")
-        .get(pk=product.uuid)
-    )
-    for component in product.product_schema.product_components.all():
-
-
-
-@pytest.mark.django_db
 def test_product_configurable_success(
     product,
     custom_component,
