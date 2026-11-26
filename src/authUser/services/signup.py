@@ -34,7 +34,7 @@ def verify_email_password(request, dto: SignupDTO):
     try:
         validate_password(dto.password)
     except ValidationError as e:
-        raise Exception(e.messages)
+        raise Exception(" ".join(e.messages))
     return adapter
 
 

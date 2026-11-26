@@ -1,15 +1,15 @@
 import strawberry
-import strawberry_django
-from strawberry import auto
-
-from . import models
 
 
-@strawberry_django.type(models.User)
-class UserType:
-    email: str
+@strawberry.type
+class AccountType:
     username: str
-    is_email_verified: bool
+    email: str
+    # new address waiting for the click on its confirmation link
+    pending_email: str | None
+    mfa_enabled: bool
+    # staff roles must keep MFA
+    mfa_required: bool
 
 
 @strawberry.type

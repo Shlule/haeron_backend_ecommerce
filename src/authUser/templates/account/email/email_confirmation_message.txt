@@ -1,0 +1,6 @@
+{% extends "account/email/base_message.txt" %}
+{% block content %}{% autoescape off %}Pour confirmer votre adresse e-mail sur Haeron Guitars, ouvrez ce lien :
+
+{{ activate_url }}
+
+Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.{% endautoescape %}{% endblock content %}

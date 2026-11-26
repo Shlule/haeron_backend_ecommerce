@@ -63,6 +63,8 @@ INSTALLED_APPS = [
     "django_extensions",
     "corsheaders",
     "rest_framework_simplejwt",
+    # refresh tokens can be revoked (logout, password reset)
+    "rest_framework_simplejwt.token_blacklist",
     "rest_framework",
     "authUser",
     "provisionning_agent",
@@ -73,15 +75,6 @@ INSTALLED_APPS = [
     "django_filters",
 ]
 
-
-HEADLESS_FRONTEND_URLS = {
-    "account_confirm_email": "http://localhost:5173/account/verify-email/{key}",
-    "account_reset_password": "http://localhost:5173/account/reset-password/{key}",
-    "account_signup": "http://localhost:5173/account/signup",
-    "socialaccount_login_error": "http://localhost:5173/account/social/error",
-}
-
-HEADLESS_TOKEN_STRATEGY = ("allauth.headless.tokens.strategies.jwt.JWTTokenStrategy")
 
 STRAWBERRY_DJANGO = {
     "FIELD_DESCRIPTION_FROM_HELP_TEXT": True,
@@ -164,6 +157,14 @@ ACCOUNT_CONFIRM_EMAIL_ON_GET = True
 ACCOUNT_RATE_LIMITS = {"login_failed": "5/5m"}
 # ACCOUNT_LOGIN_ATTEMPTS_TIMEOUT = 300
 ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+# links of the e-mails -> shop pages (SHOP_URL)
+ACCOUNT_ADAPTER = "authUser.adapters.AccountAdapter"
+# a new e-mail replaces the old one once confirmed
+ACCOUNT_CHANGE_EMAIL = True
+# "forgotten password" for an unknown address sends nothing
+ACCOUNT_EMAIL_UNKNOWN_ACCOUNTS = False
+# French e-mails: authUser/templates/account/email
+ACCOUNT_EMAIL_SUBJECT_PREFIX = "Haeron Guitars · "
 ACCOUNT_SIGNUP_FIELDS = ["username*", "email*", "email2*", "password1*", "password2*"]
 ACCOUNT_CONFIRM_EMAIL_REDIRECT_URL = config('ACCOUNT_CONFIRM_EMAIL_REDIRECT_URL', default='http://localhost:3000/auth/login')
 

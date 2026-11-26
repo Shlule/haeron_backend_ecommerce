@@ -1,10 +1,5 @@
-from django.utils.http import urlsafe_base64_decode
-from django.utils.encoding import force_str
 from django.contrib.auth import get_user_model
-from django.contrib.auth.password_validation import validate_password
-from django.contrib.auth.tokens import default_token_generator
-from allauth.account.forms import ResetPasswordForm, ResetPasswordKeyForm
-from django.contrib.auth import logout
+from allauth.account.forms import ResetPasswordForm, ResetPasswordKeyForm, UserTokenForm
 
 from .tokens import revoke_user_refresh_tokens
 
@@ -22,25 +17,25 @@ def request_password_reset(request, email):
     return True
 
 
-def confirm_password_reset(uid, key, new_password):
-
-    try:
-        uid_decoded = force_str(urlsafe_base64_decode(uid))
-        user = User.objects.get(pk=uid_decoded)
-
-    except (User.DoesNotExist, ValueError, TypeError):
+def confirm_password_reset(key, new_password, password_confirmation):
+    """key : the one of the e-mail link ("<uidb36>-<token>"). allauth checks that it belongs to the user and has not
+    expired or been used (the password change makes it invalid) before anything changes."""
+    uidb36, _, token = (key or "").partition("-")
+    token_form = UserTokenForm(data={"uidb36": uidb36, "key": token})
+    if not token_form.is_valid():
         raise Exception("Invalid reset link")
+    user = token_form.reset_user
 
     form = ResetPasswordKeyForm(
         data={
             "password1": new_password,
-            "password2": new_password,
+            "password2": password_confirmation,
         },
         user=user,
     )
 
     if not form.is_valid():
-        raise Exception(form.errors)
+        raise Exception(" ".join(m for errors in form.errors.values() for m in errors))
 
     form.save()
     revoke_user_refresh_tokens(user)
