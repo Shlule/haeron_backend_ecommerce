@@ -840,6 +840,19 @@ def _link_production_order(
     )
 
 
+def _replacement_parts(part_id: uuid.UUID) -> JSON:
+    return _production(lambda: ProductionService.replacement_parts(part_id))
+
+
+def _replace_instrument_part(
+    info: strawberry.Info, instrument_id: uuid.UUID, part_id: uuid.UUID, new_part_id: uuid.UUID, note: str = ""
+) -> JSON:
+    """A manufactured part of the instrument is swapped for a free one of the same kind (the old one returns to stock)."""
+    return _production(
+        lambda: ProductionService.replace_part(instrument_id, part_id, new_part_id, note, _staff_user(info))
+    )
+
+
 def _delete_history_event(event_id: uuid.UUID) -> bool:
     return _production(lambda: ProductionService.delete_event(event_id))
 
@@ -883,6 +896,11 @@ def _can_build_parts(info: strawberry.Info) -> bool:
 _query_fields["can_build_parts"] = strawberry.field(resolver=_can_build_parts)
 _mutation_fields["build_instrument"] = strawberry.mutation(resolver=_build_instrument, permission_classes=_build_permissions)
 _mutation_fields["build_part"] = strawberry.mutation(resolver=_build_part, permission_classes=_build_permissions)
+_query_fields["replacement_parts"] = strawberry.field(resolver=_replacement_parts)
+# what an instrument is made of shows on its certificate : managers only, like assembling it
+_mutation_fields["replace_instrument_part"] = strawberry.mutation(
+    resolver=_replace_instrument_part, permission_classes=_build_permissions
+)
 _mutation_fields["update_instrument_info"] = strawberry.mutation(resolver=_update_instrument_info)
 _mutation_fields["update_part_info"] = strawberry.mutation(resolver=_update_part_info)
 _mutation_fields["create_part_batch"] = strawberry.mutation(resolver=_create_part_batch, permission_classes=_build_permissions)

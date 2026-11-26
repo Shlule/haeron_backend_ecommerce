@@ -15,6 +15,7 @@ from django.db.models import Count, Exists, F, OuterRef, Prefetch, Q
 from django.utils import timezone
 
 from ..models import (
+    ComponentCompatibility,
     Factory,
     Instrument,
     InstrumentHistory,
@@ -130,9 +131,7 @@ class ProductionService:
 
         orders = [order for order in orders if waits(order)]
         # parts that can go on an instrument : not mounted, not sold alone with an order
-        free_parts = Part.objects.filter(
-            instrument__isnull=True, instrument_masterpart__isnull=True, order_item__isnull=True
-        ).select_related("part_model")
+        free_parts = ProductionService._free_parts().select_related("part_model")
         return {
             "eventTypes": [{"value": value, "label": label} for value, label in EVENT_TYPES],
             "statuses": [{"value": value, "label": label} for value, label in SALE_STATUSES],
@@ -561,6 +560,117 @@ class ProductionService:
         if not updated:
             raise ValidationError("Pièce introuvable.")
         return ProductionService.part_sheet(part_id)
+
+    # --- replacing a manufactured part ---
+
+    @staticmethod
+    def _free_parts():
+        """Parts that can go on an instrument : not mounted, not sold alone with an order."""
+        return Part.objects.filter(instrument__isnull=True, instrument_masterpart__isnull=True, order_item__isnull=True)
+
+    @staticmethod
+    def _compatible_models(instrument, part):
+        """Part models that can take this part's place on the instrument : those the catalogue declares compatible
+        with the instrument model (Compatibilité), of the same type, plus the model already mounted.
+        None when the catalogue declares nothing for this type on this model : every model of the type is then let in."""
+        declared = set(
+            ComponentCompatibility.objects.filter(
+                instrument_model_id=instrument.instrument_model_id,
+                part_model__part_type_id=part.part_model.part_type_id,
+            ).values_list("part_model_id", flat=True)
+        )
+        return declared | {part.part_model_id} if declared else None
+
+    @staticmethod
+    def replacement_parts(part_id):
+        """Free parts that can take the place of a mounted one : same type, compatible with the instrument model
+        when the catalogue says which ones are, same model first."""
+        part = Part.objects.select_related("part_model", "instrument").filter(pk=part_id).first()
+        if part is None or part.instrument is None:
+            raise ValidationError("Cette pièce n'est montée sur aucun instrument.")
+        models = ProductionService._compatible_models(part.instrument, part)
+        rows = ProductionService._free_parts().filter(part_model__part_type_id=part.part_model.part_type_id)
+        if models is not None:
+            rows = rows.filter(part_model_id__in=models)
+        rows = sorted(
+            rows.select_related("part_model").order_by("-created_at")[:300],
+            key=lambda p: p.part_model_id != part.part_model_id,
+        )
+        return {
+            # false : nothing declared for this type in Compatibilité, every model of the type is listed
+            "checked": models is not None,
+            "parts": [
+                {
+                    "id": str(p.uuid),
+                    "serialNumber": p.serial_number,
+                    "partModel": p.part_model.name,
+                    "sameModel": p.part_model_id == part.part_model_id,
+                    "options": ", ".join(
+                        f"{o.get('name', '')} : {o.get('value', '')}"
+                        for o in (p.production_snapshot or {}).get("options", [])
+                        if o.get("value")
+                    ),
+                }
+                for p in rows
+            ],
+        }
+
+    @staticmethod
+    @transaction.atomic
+    def replace_part(instrument_id, part_id, new_part_id, note="", user=None):
+        """Takes a part off the instrument and mounts a free one of the same kind in its place. The old part goes
+        back to stock (free again), the new one follows the instrument (owner, sold or not). Both stay in history."""
+        user = _user(user)
+        instrument = (
+            Instrument.objects.select_for_update(of=("self",)).select_related("master_part", "instrument_model")
+            .filter(pk=instrument_id)
+            .first()
+        )
+        if instrument is None:
+            raise ValidationError("Instrument introuvable.")
+        parts = {p.uuid: p for p in Part.objects.select_for_update().select_related("part_model").filter(uuid__in=[part_id, new_part_id])}
+        old, new = parts.get(part_id), parts.get(new_part_id)
+        if old is None or old.instrument_id != instrument.uuid:
+            raise ValidationError("Cette pièce n'est plus montée sur cet instrument.")
+        if old.uuid == instrument.master_part_id:
+            raise ValidationError(
+                "La pièce maîtresse porte le numéro de série de l'instrument : elle ne se remplace pas."
+            )
+        if new is None:
+            raise ValidationError("La pièce de remplacement n'existe plus.")
+        if not ProductionService._free_parts().filter(pk=new.uuid).exists():
+            raise ValidationError(f"La pièce {new.serial_number} est déjà montée ou vendue avec une commande.")
+        if new.part_model.part_type_id != old.part_model.part_type_id:
+            raise ValidationError("La pièce de remplacement doit être du même type.")
+        models = ProductionService._compatible_models(instrument, old)
+        if models is not None and new.part_model_id not in models:
+            raise ValidationError(
+                f"{new.part_model.name} n'est pas compatible avec le modèle {instrument.instrument_model.name} "
+                "(voir Compatibilité dans le catalogue)."
+            )
+        note = _text(note)[:255]
+        serial = instrument.master_part.serial_number
+
+        old.instrument, old.owner, old.status, old.sold_at, old.updated_by = None, None, "in_stock", None, user
+        old.save(update_fields=["instrument", "owner", "status", "sold_at", "updated_by", "updated_at"])
+        new.instrument, new.owner, new.updated_by = instrument, instrument.owner, user
+        new.status, new.sold_at = instrument.status, instrument.sold_at
+        new.save(update_fields=["instrument", "owner", "status", "sold_at", "updated_by", "updated_at"])
+
+        change = f"{old.part_model.name} : {old.serial_number} → {new.serial_number}"
+        ProductionService._history(
+            instrument, "modification", "Pièce remplacée", f"{change}." + (f" {note}" if note else ""), user
+        )
+        ProductionService._history(
+            old, "modification", f"Démontée de l'instrument {serial}",
+            f"Remplacée par {new.serial_number}." + (f" {note}" if note else ""), user,
+        )
+        ProductionService._history(
+            new, "assemblage", "Montée sur un instrument",
+            f"{instrument.instrument_model.name} {serial} (remplace {old.serial_number})." + (f" {note}" if note else ""),
+            user,
+        )
+        return ProductionService.instrument_sheet(instrument.uuid)
 
     # --- sold or not ---
 
