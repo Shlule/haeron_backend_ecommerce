@@ -1,0 +1,30 @@
+# Base Postgres et Vault locaux pour développer et tester sans toucher Supabase ni le vrai Vault.
+# Démarrer : docker compose -f compose.dev.yaml up -d
+# Repartir de zéro : docker compose -f compose.dev.yaml down -v
+# Les commandes Django passent par .\local.ps1, qui pointe vers ces deux services.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: haeron
+      POSTGRES_USER: haeron
+      POSTGRES_PASSWORD: haeron
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - haeron-dev-db:/var/lib/postgresql/data
+
+  # Vault en mode dev : en mémoire (les clés disparaissent à l'arrêt), moteur KV v2 déjà monté sur secret/
+  # Après un redémarrage de Docker, la base garde ses pièces mais Vault a perdu leurs clés : les recréer avec
+  #   .\local.ps1 restore_dev_vault_keys
+  vault:
+    image: hashicorp/vault:1.18
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: haeron-dev
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - "127.0.0.1:8201:8200"
+
+volumes:
+  haeron-dev-db:

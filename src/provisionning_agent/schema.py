@@ -29,6 +29,7 @@ class AgentMutation:
 
         agent = ProvisionningAgent.objects.create(
             name=name,
+            agent_type=agent_type,
             created_by=info.context["request"].user,
         )
         token = secrets.token_urlsafe(32)

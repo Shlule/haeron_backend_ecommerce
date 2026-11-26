@@ -1,7 +1,8 @@
 from haeron_guitar_api.security.vault.vault_factory import get_vault_service
-from ..models import PartModel, PartType, Series, Option
+from ..models import PartModel, PartType, Series
 from .part_model_dto import CreatePartModelDTO, UpdatePartModelDTO
 from django.db import transaction
+from django.utils import timezone
 
 
 class PartModelService:
@@ -48,13 +49,16 @@ class PartModelService:
         if dto.series_id is not None:
             part_model.series = Series.objects.get(pk=dto.series_id)
 
-        if dto.compatible_options_ids is not None:
-            options = Option.objects.filter(uid__in=dto.compatible_options_ids)
-            # Vérifie que tous les IDs donnés existent
-            if len(options) != len(dto.compatible_options_ids):
-                missing_ids = set(dto.compatible_options_ids) - set(o.uid for o in options)
-                raise ValueError(f"Options not found: {missing_ids}")
-            part_model.compatible_options.set(options)
+        if dto.status is not None and dto.status != part_model.status:
+            statuses = [value for value, _ in PartModel._meta.get_field("status").choices]
+            if dto.status not in statuses:
+                raise ValueError(f"Unknown status {dto.status}, expected one of {statuses}")
+            part_model.status = dto.status
+            # date at which the model stopped being sold, cleared if it is sold again
+            if dto.status in ("service_only", "discontinued"):
+                part_model.discontinued_at = part_model.discontinued_at or timezone.now()
+            else:
+                part_model.discontinued_at = None
 
         part_model.save()
         return part_model

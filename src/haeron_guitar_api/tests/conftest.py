@@ -18,13 +18,12 @@ from ..models import (
 
 @pytest.fixture
 def instrument_type(db):
-    return InstrumentType.objects.create(name="Guitar", code="GTR")
+    return InstrumentType.objects.create(name="Guitar", code="GT")
 
 
 @pytest.fixture
 def part_type(db, instrument_type):
     part_type = PartType.objects.create(name="Pickup", code="PCK")
-    part_type.instrument_types.add(instrument_type)
     return part_type
 
 

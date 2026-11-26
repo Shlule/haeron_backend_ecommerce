@@ -13,10 +13,10 @@ class ProducChoiceHandler:
 
         product_id = data.get("product_id")
 
-        user_choice = (
-            ProductComponentChoice.objects.filter(component=component, product_id=product_id)
-            .select_related("product")
-            .first()
+        # choices are loaded with the product (see product_loader) : no query here
+        user_choice = next(
+            (choice for choice in component.product_component_choices.all() if str(choice.product_id) == str(product_id)),
+            None,
         )
         if not user_choice:
             raise ValidationError(f"Product {product_id} not allowed for component {component.key}")
@@ -32,11 +32,9 @@ class ProducChoiceHandler:
         }
 
     def bulk_build_configuration(self, components, product):
-        choices = ProductComponentChoice.objects.filter(component__in=components).select_related("product", "component")
-
-        choices_by_component = {}
-        for choice in choices:
-            choices_by_component.setdefault(choice.component_id, []).append(choice.product)
+        choices_by_component = {
+            comp.uuid: [choice.product for choice in comp.product_component_choices.all()] for comp in components
+        }
 
         result = []
 
@@ -51,7 +49,7 @@ class ProducChoiceHandler:
                             "name": p.name,
                             "price": float(p.price),
                         }
-                        for p in choices_by_component.get(comp.id, [])
+                        for p in choices_by_component.get(comp.uuid, [])
                     ],
                 }
             )

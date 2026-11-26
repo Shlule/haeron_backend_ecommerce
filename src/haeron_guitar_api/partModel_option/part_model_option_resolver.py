@@ -6,9 +6,14 @@ from typing import List
 from ..types.types import PartModelOptionGQLType
 from ..models import PartModelOption
 
-from .part_model_option_dto import CreatePartModelOptionDTO, UpdatePartModelOptionPriceDTO
+from .part_model_option_dto import (
+    CreatePartModelOptionDTO,
+    UpdatePartModelOptionActiveDTO,
+    UpdatePartModelOptionPriceDTO,
+)
 from .part_model_option_input import (
     CreatePartModelOptionInput,
+    UpdatePartModelOptionActiveInput,
     UpdatePartModelOptionPriceInput,
     PartModelOptionInputFilter,
 )
@@ -29,7 +34,7 @@ class PartModelOptionQuery:
 
     @strawberry.field(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "production_manager", "rnd")])
     def get_all_part_model_options(self) -> List[PartModelOptionGQLType]:
-        return PartModelOption.objects.all()
+        return PartModelOption.objects.select_related("option", "part_model__part_type")
 
 
 @strawberry.type
@@ -50,6 +55,11 @@ class PartModelOptionMutation:
     def update_price(self, input: UpdatePartModelOptionPriceInput) -> PartModelOptionGQLType:
         dto = UpdatePartModelOptionPriceDTO(uuid=input.uuid, price_delta=input.price_delta)
         return PartModelOptionService.update_price(dto)
+
+    @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "rnd")])
+    def set_part_model_option_active(self, input: UpdatePartModelOptionActiveInput) -> PartModelOptionGQLType:
+        dto = UpdatePartModelOptionActiveDTO(uuid=input.uuid, is_active=input.is_active)
+        return PartModelOptionService.set_active(dto)
 
     @strawberry.mutation(permission_classes=[IsAuthenticated, HasRole("superadmin","admin", "rnd")])
     def delete_part_model_options(self, part_model_options_ids: List[UUID]) -> bool:

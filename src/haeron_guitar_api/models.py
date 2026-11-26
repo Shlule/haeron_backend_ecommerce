@@ -18,6 +18,9 @@ class AuditMixin(models.Model):
         abstract = True
 
 
+SALE_STATUSES = [("in_stock", "En stock"), ("reserved", "Réservé"), ("sold", "Vendu")]
+
+
 class InstrumentHistory(AuditMixin):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     instrument = models.ForeignKey("Instrument", on_delete=models.CASCADE, related_name="history")
@@ -55,6 +58,17 @@ class Instrument(AuditMixin):
         limit_choices_to={"is_master": True},
     )
     instrument_model = models.ForeignKey("InstrumentModel", on_delete=models.PROTECT, related_name="instruments")
+    description = models.TextField(blank=True, default="")
+    # configuration it was built from (order line snapshot or composition typed in the back-office)
+    configuration = models.JSONField(default=dict, blank=True)
+    # sold or not : selling the instrument sells its parts (see ProductionService.set_status)
+    status = models.CharField(max_length=20, choices=SALE_STATUSES, default="in_stock", db_index=True)
+    sold_at = models.DateTimeField(null=True, blank=True)
+    # order line it was made or taken from stock for (empty : in stock, or sold outside the shop).
+    # The order line keeps its own snapshot of what was sold : this link says what was delivered.
+    order_item = models.ForeignKey(
+        "OrderItem", null=True, blank=True, on_delete=models.SET_NULL, related_name="instruments"
+    )
 
 
 class InstrumentModel(models.Model):
@@ -105,6 +119,8 @@ class PartModelOption(AuditMixin):
     part_model = models.ForeignKey("PartModel", on_delete=models.CASCADE)
     option = models.ForeignKey("Option", on_delete=models.CASCADE)
     price_delta = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    # a value no longer offered in the configurator stays in the database for the history and the rules
+    is_active = models.BooleanField(default=True)
 
 
 class PartHistory(AuditMixin):
@@ -137,9 +153,20 @@ class Part(AuditMixin):
         on_delete=models.PROTECT,
     )
     is_master = models.BooleanField(default=False)
+    description = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=20, choices=SALE_STATUSES, default="in_stock", db_index=True)
+    sold_at = models.DateTimeField(null=True, blank=True)
+    # order line of a piece sold alone ; a part mounted on an instrument follows the instrument's order
+    order_item = models.ForeignKey(
+        "OrderItem", null=True, blank=True, on_delete=models.SET_NULL, related_name="parts"
+    )
     production_snapshot = models.JSONField(
         default=dict,
         blank=True,
+    )
+    # supplier invoice line that paid for this piece (made by an outside factory) : what it cost
+    purchase_line = models.ForeignKey(
+        "PurchaseInvoiceLine", null=True, blank=True, on_delete=models.SET_NULL, related_name="parts"
     )
 
 
@@ -246,8 +273,13 @@ class Option(AuditMixin):
 
 
 class SerialCounter(models.Model):
+    """Last number given, per workshop, part model and year : the bodies of 2026 go 0001, 0002, 0003...
+    The model code is in the serial number, so two models never share a number.
+    A counter without part model is the old one shared by every part (kept, no longer used)."""
+
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     factory = models.ForeignKey("Factory", on_delete=models.CASCADE)
+    part_model = models.ForeignKey("PartModel", null=True, blank=True, on_delete=models.CASCADE)
     year = models.PositiveIntegerField()
     last_value = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -255,7 +287,7 @@ class SerialCounter(models.Model):
 
     class Meta:
         unique_together = [
-            ("factory", "year")
+            ("factory", "part_model", "year")
         ]
 
 
@@ -276,12 +308,19 @@ class Product(models.Model):
     name = models.CharField(max_length=255)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     product_type = models.ForeignKey("ProductType", related_name="type_products", on_delete=models.PROTECT)
+    # no schema : the product is not configurable, it is sold as it is (accessory, strings...)
     product_schema = models.ForeignKey(
-        "ProductSchema", related_name="schema_products", on_delete=models.SET_NULL, null=True
+        "ProductSchema", related_name="schema_products", on_delete=models.SET_NULL, null=True, blank=True
     )
     instrument_model = models.ForeignKey(
         "InstrumentModel", related_name="products", null=True, blank=True, on_delete=models.SET_NULL
     )
+    # shop display : picture of the product card and 3D model of the configurator, paths served by the front (ex: /models/starlight.glb)
+    image = models.CharField(max_length=255, blank=True, default="")
+    model_3d = models.CharField(max_length=255, blank=True, default="")
+    # hidden : not listed in the shop and cannot be added to a cart, but kept with its orders and carts.
+    # Its configurator page still opens, to try a product before showing it.
+    is_visible = models.BooleanField(default=True, db_index=True)
 
 
 class ProductType(models.Model):
@@ -361,7 +400,18 @@ class CartItem(models.Model):
 
 class Order(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, unique=True)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    # null for a guest order : the customer is known by the contact and address below
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT)
+
+    # contact and delivery address, copied at checkout so the order keeps them even if the account changes
+    email = models.EmailField(blank=True, default="")
+    first_name = models.CharField(max_length=100, blank=True, default="")
+    last_name = models.CharField(max_length=100, blank=True, default="")
+    phone = models.CharField(max_length=30, blank=True, default="")
+    address = models.CharField(max_length=255, blank=True, default="")
+    postal_code = models.CharField(max_length=20, blank=True, default="")
+    city = models.CharField(max_length=100, blank=True, default="")
+    country = models.CharField(max_length=2, blank=True, default="FR")
 
     # this key is provided by the front end th goal is to avoid genreating multiple order if
     # user emit multiple request because low frequency network
@@ -383,6 +433,26 @@ class Order(models.Model):
     # blankable and nullable because we fill this fields with calculation of order itemPrice.
     total_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
 
+    # parcel : filled in the back-office when the order leaves the workshop (see order/shipping.py)
+    carrier = models.CharField(max_length=30, blank=True, default="")
+    tracking_number = models.CharField(max_length=100, blank=True, default="")
+    # tracking page given by hand, for a carrier missing from the list
+    tracking_url = models.URLField(max_length=500, blank=True, default="")
+    shipped_at = models.DateTimeField(null=True, blank=True)
+
+    # proof of the two boxes ticked before paying : the CGV, and (separately, article L217-5 II of the Code de la
+    # consommation) the colours shown being indicative and the configuration choices not being refunded
+    terms_accepted_at = models.DateTimeField(null=True, blank=True)
+    colour_terms_accepted_at = models.DateTimeField(null=True, blank=True)
+
+    # partner code used (typed or from a partner link) : the discount given and the partner rate, copied at checkout
+    # so changing the partner later does not change past orders (see partners/partner_service.py)
+    partner = models.ForeignKey("Partner", null=True, blank=True, on_delete=models.PROTECT, related_name="orders")
+    partner_code = models.CharField(max_length=40, blank=True, default="")
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    commission_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
 
@@ -397,6 +467,41 @@ class OrderItem(models.Model):
 
     config_snapshot = models.JSONField()
     config_hash = models.CharField(max_length=64)
+
+
+class Payment(models.Model):
+    """Money received for an order : a Stripe Checkout session, or a payment recorded by hand
+    (bank transfer, cash) when the back-office marks the order as paid.
+    Refunds and Stripe fees are kept here too, so the back-office can show money in and out."""
+
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    order = models.ForeignKey(Order, related_name="payments", on_delete=models.PROTECT)
+
+    provider = models.CharField(max_length=20, choices=[("stripe", "Stripe"), ("manual", "Manual")], default="stripe")
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ("pending", "Pending"),  # customer sent to the Stripe page
+            ("paid", "Paid"),
+            ("failed", "Failed"),
+            ("expired", "Expired"),  # Stripe page left without paying
+            ("refunded", "Refunded"),
+            ("partially_refunded", "Partially refunded"),
+        ],
+        default="pending",
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, default="eur")
+    fee = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)  # Stripe fee, known once paid
+    refunded_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    stripe_session_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    stripe_payment_intent_id = models.CharField(max_length=255, blank=True, default="", db_index=True)
+    livemode = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    refunded_at = models.DateTimeField(null=True, blank=True)
 
 
 # this is use for Rule Engine and put relation between partModelOption on productCOmponentChoice
@@ -476,3 +581,207 @@ class ConfigurationResult(models.Model):
     target_values = models.ManyToManyField("SelectableValue", related_name="result_targets")
 
     # values = models.ManyToManyField("SelectableValue", related_name="result_values")
+
+
+# --- achats et stock -------------------------------------------------------------------------------------------------
+# What the workshop buys : supplier invoices (every expense, with its PDF), and the parts bought from others (pickups,
+# tuners, bridges...) kept in stock, either for building ("Atelier") or for selling alone ("Vente").
+
+EXPENSE_CATEGORIES = [
+    ("components", "Composants achetés"),
+    ("manufacturing", "Pièces fabriquées (usine)"),
+    ("materials", "Bois et matières"),
+    ("tools", "Outillage et machines"),
+    ("shipping", "Transport et emballage"),
+    ("marketing", "Publicité et salons"),
+    ("software", "Logiciels et abonnements"),
+    ("premises", "Loyer et charges"),
+    ("services", "Prestations et honoraires"),
+    ("other", "Autre"),
+]
+STOCK_ZONES = [("workshop", "Atelier"), ("shop", "Vente")]
+PAYMENT_METHODS = [
+    ("transfer", "Virement"),
+    ("card", "Carte"),
+    ("direct_debit", "Prélèvement"),
+    ("cash", "Espèces"),
+    ("other", "Autre"),
+]
+
+
+class Supplier(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=150, unique=True)
+    email = models.EmailField(blank=True, default="")
+    phone = models.CharField(max_length=30, blank=True, default="")
+    website = models.URLField(blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+
+class StockItem(models.Model):
+    """A part bought from a supplier and kept in stock (a pickup model, a set of tuners...)."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=150)
+    reference = models.CharField(max_length=100, blank=True, default="")  # supplier's reference
+    family = models.CharField(max_length=60, blank=True, default="")  # Micros, Mécaniques, Chevalets...
+    supplier = models.ForeignKey(Supplier, null=True, blank=True, on_delete=models.SET_NULL, related_name="items")
+    unit = models.CharField(max_length=20, default="pièce")
+    alert_quantity = models.DecimalField(max_digits=10, decimal_places=3, default=0)  # warn below this, all zones
+    is_active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True, default="")
+
+    def __str__(self):
+        return f"{self.name} ({self.reference})" if self.reference else self.name
+
+
+class PurchaseInvoice(AuditMixin):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name="invoices")
+    number = models.CharField(max_length=100)
+    issued_on = models.DateField(db_index=True)
+    due_on = models.DateField(null=True, blank=True)
+    paid_on = models.DateField(null=True, blank=True)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS, blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    # the invoice itself (PDF or photo), kept in the database so it is backed up with it
+    file = models.BinaryField(null=True, blank=True, editable=False)
+    file_name = models.CharField(max_length=255, blank=True, default="")
+    file_type = models.CharField(max_length=100, blank=True, default="")
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["supplier", "number"], name="uniq_purchase_invoice_number")]
+
+    def __str__(self):
+        return f"{self.supplier} n° {self.number}"
+
+
+class PurchaseInvoiceLine(models.Model):
+    """One line of a supplier invoice. With a stock item, its quantity enters the stock at its unit price."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    invoice = models.ForeignKey(PurchaseInvoice, on_delete=models.CASCADE, related_name="lines")
+    designation = models.CharField(max_length=255)
+    category = models.CharField(max_length=20, choices=EXPENSE_CATEGORIES, default="other")
+    stock_item = models.ForeignKey(
+        StockItem, null=True, blank=True, on_delete=models.PROTECT, related_name="invoice_lines"
+    )
+    zone = models.CharField(max_length=20, choices=STOCK_ZONES, blank=True, default="")
+    quantity = models.DecimalField(max_digits=10, decimal_places=3, default=1)
+    unit_price_ht = models.DecimalField(max_digits=12, decimal_places=4)
+    vat_rate = models.DecimalField(max_digits=5, decimal_places=2, default=20)  # in %
+
+    def __str__(self):
+        return self.designation
+
+
+STOCK_MOVEMENT_KINDS = [
+    ("purchase", "Achat"),
+    ("use", "Utilisé en fabrication"),
+    ("sale", "Vendu seul"),
+    ("transfer", "Transfert"),
+    ("adjustment", "Correction d'inventaire"),
+]
+
+
+class StockMovement(AuditMixin):
+    """Stock goes in and out only through movements : the quantity in a zone is the sum of its movements."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    stock_item = models.ForeignKey(StockItem, on_delete=models.PROTECT, related_name="movements")
+    zone = models.CharField(max_length=20, choices=STOCK_ZONES)
+    kind = models.CharField(max_length=20, choices=STOCK_MOVEMENT_KINDS)
+    quantity = models.DecimalField(max_digits=10, decimal_places=3)  # positive in, negative out
+    unit_cost = models.DecimalField(max_digits=12, decimal_places=4, default=0)  # HT, at the time of the movement
+    invoice_line = models.ForeignKey(
+        PurchaseInvoiceLine, null=True, blank=True, on_delete=models.CASCADE, related_name="movements"
+    )
+    instrument = models.ForeignKey(
+        Instrument, null=True, blank=True, on_delete=models.SET_NULL, related_name="stock_movements"
+    )
+    order = models.ForeignKey(Order, null=True, blank=True, on_delete=models.SET_NULL, related_name="stock_movements")
+    note = models.CharField(max_length=255, blank=True, default="")
+    occurred_at = models.DateTimeField(db_index=True)
+
+    def __str__(self):
+        return f"{self.get_kind_display()} {self.quantity} {self.stock_item}"
+
+
+class Partner(models.Model):
+    """Business partner (shop, teacher, artist...) : a customer coming with its code or its link gets a discount,
+    and the partner earns a commission on what the customer paid (see partners/partner_service.py)."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=150)
+    email = models.EmailField(blank=True, default="")
+    phone = models.CharField(max_length=30, blank=True, default="")
+    # identity and address of who receives the money : needed for the DAS2 above 1 200 euros a year
+    company = models.CharField(max_length=150, blank=True, default="")
+    siret = models.CharField(max_length=20, blank=True, default="")
+    address = models.CharField(max_length=255, blank=True, default="")
+    # typed by the customer or carried by the link (?ref=CODE) : stored in capitals
+    code = models.CharField(max_length=40, unique=True)
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=5)
+    commission_percent = models.DecimalField(max_digits=5, decimal_places=2, default=10)
+    is_active = models.BooleanField(default=True)
+    # last day the code works (empty : no end)
+    valid_until = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
+class PartnerPayout(AuditMixin):
+    """Commission money sent to a partner."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(Partner, on_delete=models.PROTECT, related_name="payouts")
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    paid_on = models.DateField()
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS, blank=True, default="")
+    note = models.CharField(max_length=255, blank=True, default="")
+
+
+# what is mounted on an instrument besides its manufactured parts (bought hardware : not serial numbered)
+EQUIPMENT_SLOTS = [
+    ("mecaniques", "Mécaniques"),
+    ("micros", "Micros"),
+    ("chevalet", "Chevalet"),
+    ("selecteur", "Sélecteur"),
+    ("potentiometres", "Potentiomètres"),
+    ("jack", "Jack"),
+    ("autre", "Autre"),
+]
+
+
+class InstrumentEquipment(AuditMixin):
+    """One piece of hardware mounted on an instrument (a pickup, a set of tuners...). A replaced or removed one is
+    kept with its removal date : the instrument's rows tell what it carries now and what it carried before."""
+
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    instrument = models.ForeignKey(Instrument, on_delete=models.CASCADE, related_name="equipment")
+    slot = models.CharField(max_length=20, choices=EQUIPMENT_SLOTS)
+    name = models.CharField(max_length=255)
+    # where it comes from : the order configuration (catalogue product) and/or the workshop stock
+    product = models.ForeignKey(Product, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    stock_item = models.ForeignKey(StockItem, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    stock_movement = models.ForeignKey(
+        StockMovement, null=True, blank=True, on_delete=models.SET_NULL, related_name="equipment"
+    )
+    from_order = models.BooleanField(default=False)
+    note = models.CharField(max_length=255, blank=True, default="")
+    installed_at = models.DateTimeField()
+    removed_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    removal_note = models.CharField(max_length=255, blank=True, default="")
+
+    class Meta:
+        ordering = ["installed_at"]
+
+    def __str__(self):
+        return f"{self.get_slot_display()} : {self.name}"

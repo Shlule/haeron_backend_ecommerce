@@ -15,8 +15,9 @@ class BaseComponentHandler:
         return self._validate_business(component, config, product=None)
 
     def resolve(self, component, config, product=None):
-        self.validate(component, config, product)
-        return self._resolve(component, config, product)
+        validated = self.validate(component, config, product)
+        # what validate read from the database is given to _resolve, so it is not read twice
+        return self._resolve(component, config, product, validated=validated)
 
     def _resolve(component, config, product):
         raise NotImplementedError

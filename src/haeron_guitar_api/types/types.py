@@ -23,6 +23,7 @@ class AuditInterface:
 class SerialCounterGQLType:
     uuid: ID
     factory: "FactoryGQLType"
+    part_model: Optional["PartModelGQLType"]
     year: str
     last_value: int
 
@@ -85,7 +86,8 @@ class PartModelOptionGQLType:
     code: str
     part_model: "PartModelGQLType"
     option: "OptionGQLType"
-    price_delta = Decimal
+    price_delta: Decimal
+    is_active: bool
 
 
 @strawberry_django.type(models.PartModel)
@@ -96,6 +98,8 @@ class PartModelGQLType:
     part_type: PartTypeGQLType
     series: Optional["SeriesGQLType"]
     code: str
+    status: str
+    discontinued_at: Optional[datetime]
 
 
 @strawberry_django.type(models.PartHistory)

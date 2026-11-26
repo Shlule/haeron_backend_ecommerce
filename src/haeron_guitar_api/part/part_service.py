@@ -3,6 +3,7 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 from uuid import UUID
 from django.db.models import Max
+from django.utils import timezone
 import logging
 
 
@@ -54,8 +55,6 @@ class PartService:
             production_snapshot=dto.production_snapshot
         )
 
-        SerialCounterService.next(dto.factory_id)
-
         return part
 
     @staticmethod
@@ -84,10 +83,8 @@ class PartService:
             )
         batch_code = batch.code
 
-        serial_counter = SerialCounterService.get_or_create_today(factory.uuid)
-        serial_value = serial_counter.last_value
-        current_year = serial_counter.year
-        next_value = serial_value + 1
+        # takes the number for good : call it only to create the part, in the same transaction
+        next_value, current_year = SerialCounterService.reserve(factory.uuid, part_model.uuid)
 
         return f"{str(factory.code)}{instrument_type_code}-{part_model.code}{str(current_year)}-{str(batch_code)}{str(next_value).zfill(4)}"
 
@@ -132,13 +129,8 @@ class PartService:
             logger.error("allready provided")
             return {}
 
-        last_revoked_identity = (
-            PartNFCIdentity.objects
-            .filter(part=part, status="revoked")
-            .order_by("-created_at")
-            .first()
-        )
-
+        # the version counts per physical tag (its UID) : a tag written before gets the next version,
+        # a new tag (e.g. replacing a broken one) starts at 1
         new_version = (
             PartNFCIdentity.objects.filter(part=part, nfc_uid=nfc_uid_p).aggregate(Max("key_version"))["key_version__max"]
             or 0
@@ -173,21 +165,10 @@ class PartService:
                 nfc_uid_p,
                 old_version,
             )
-            else: 
-                if not last_revoked_identity:
-                    old_tag_key = bytes(16)
-                # the old key if we change the tag uid. 
-                else: 
-                    old_tag_key = HKDFService.derive_tag_key(
-                    vault_service.get_secret(
-                        vault_service.get_vault_path("domain", part_model_id=part_model_id),
-                    ),
-                    vault_service.get_secret(
-                        vault_service.get_vault_path("batch", part_model_id=part_model_id, batch_id=part_batch_id)
-                    ),
-                    last_revoked_identity.nfc_uid,
-                    last_revoked_identity.key_version,
-                )
+            else:
+                # a tag never written by Haeron still has its factory key (16 zero bytes), even when it replaces
+                # the broken tag of a part : the key of the old tag stays on the old tag
+                old_tag_key = bytes(16)
 
         else: 
             tag_key = bytes(16)
@@ -333,7 +314,8 @@ class PartService:
 
         # Révocation
         active_identity.status = "revoked"
-        active_identity.save(update_fields=["status"])
+        active_identity.revoked_at = timezone.now()
+        active_identity.save(update_fields=["status", "revoked_at"])
 
         return {
             "status": "success",

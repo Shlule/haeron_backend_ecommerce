@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import sys
 from pathlib import Path
 from decouple import config
 import stripe
@@ -62,6 +63,7 @@ INSTALLED_APPS = [
     "django_extensions",
     "corsheaders",
     "rest_framework_simplejwt",
+    "rest_framework",
     "authUser",
     "provisionning_agent",
     "haeron_guitar_api.apps.HaeronGuitarApiConfig",
@@ -87,6 +89,8 @@ STRAWBERRY_DJANGO = {
 }
 
 MIDDLEWARE = [
+    # compresses the JSON responses (5 to 8 times lighter) ; first, so it compresses the final response
+    "django.middleware.gzip.GZipMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -173,7 +177,6 @@ EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='no-reply@example.com')
 
 # EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
-DEFAULT_FROM_EMAIL = "no-reply@example.com"
 
 SITE_ID = 1
 
@@ -200,6 +203,11 @@ WSGI_APPLICATION = "haeron_backend.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# psycopg 3 with a pool : the connections to Supabase stay open and are reused from one request to the next,
+# instead of a new connection (network + TLS + login) for every request. DB_POOL=False goes back to one per request.
+# Only the server (uvicorn) gets it by default : the manage.py commands (migrate, shell, seed...) live a few seconds,
+# and without a pool a database that cannot be reached shows its real error instead of a "PoolTimeout".
+DB_POOL = config("DB_POOL", default=Path(sys.argv[0]).name != "manage.py", cast=bool)
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -208,6 +216,16 @@ DATABASES = {
         "PASSWORD": config("DB_PASSWORD"),
         "HOST": config("DB_HOST"),
         "PORT": config("DB_PORT"),
+        # the Supabase pooler in transaction mode (port 6543) keeps neither prepared statements nor server cursors
+        "DISABLE_SERVER_SIDE_CURSORS": True,
+        "OPTIONS": {
+            "prepare_threshold": None,
+            **(
+                {"pool": {"min_size": 1, "max_size": config("DB_POOL_MAX_SIZE", default=10, cast=int), "timeout": 10}}
+                if DB_POOL
+                else {}
+            ),
+        },
     }
 }
 

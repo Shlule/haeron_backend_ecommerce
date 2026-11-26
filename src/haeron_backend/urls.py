@@ -8,6 +8,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from strawberry.django.views import GraphQLView
 from django.views.decorators.csrf import csrf_exempt
 from haeron_guitar_api.payments.stripe_webhook import stripe_webhook
+from haeron_guitar_api.purchasing.views import PurchaseInvoiceFileView
 
 from .schema import schema
 
@@ -53,7 +54,8 @@ urlpatterns = [
     path("health/live/", LivenessState.as_view(), name="health-live"),
     path("health/ready/", ReadinessState.as_view(), name="health-ready"),
     path("agents/engraving/fetch/", EngravingFetchView.as_view(), name="engraving-fetch"),
-    path("agents/engraving/confirm/", EngravingConfirmView.as_view(), name="engraving-confirm")
+    path("agents/engraving/confirm/", EngravingConfirmView.as_view(), name="engraving-confirm"),
+    path("api/backoffice/purchase-invoices/<uuid:invoice_id>/file/", PurchaseInvoiceFileView.as_view(), name="purchase-invoice-file"),
     # path("accounts/", include("allauth.urls")),
     # path("accounts/mfa", include("allauth.mfa.urls")),
 ]

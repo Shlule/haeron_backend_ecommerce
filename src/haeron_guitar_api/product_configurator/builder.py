@@ -3,18 +3,15 @@ from haeron_guitar_api.product_configurator.product_component_handlers.product_c
     ComponentHandlerRegistry,
 )
 from ..types.product_configurator_types import ProductConfiguration
-from ..models import Product
+from .product_loader import is_loaded, load_product
 
 # THis is the the fonction that serve the forms of configuration to the fron end.
 # after we call
 
 
 def build_product_configuration(product):
-    product = (
-        Product.objects.select_related("product_schema")
-        .prefetch_related("product_schema__product_components__component_compatibilities")
-        .get(pk=product.pk)
-    )
+    if not is_loaded(product):
+        product = load_product(product.pk)
 
     components = list(product.product_schema.product_components.all())
 

@@ -5,7 +5,7 @@ from ....types.product_configurator_types import FixedComponent
 
 @ComponentHandlerRegistry.register("fixed")
 class FixedHandler:
-    def resolve(self, component, data=None, **kwargs):
+    def resolve(self, component, data=None, product=None, **kwargs):
 
         if not component.fixed_product:
             raise ValidationError(f"Fixed component {component.key} has no fixed_product")

@@ -8,10 +8,13 @@ from typing import Any
 from uuid import UUID
 
 from haeron_guitar_api.models import (
+    InstrumentEquipment,
     InstrumentHistory,
     Part,
     PartHistory,
 )
+from haeron_guitar_api.production.equipment_service import EquipmentService
+from haeron_guitar_api.production.hidden_mark_service import is_private_event
 from .verification_dto import (
     VerificationResponseDTO,
     VerificationInfoDTO,
@@ -22,7 +25,7 @@ from .verification_dto import (
     PartModelDTO,
     PartTypeDTO,
     PartBatchDTO,
-    SecurityMarkDTO,
+    EquipmentDTO,
     PartHistoryDTO,
     UserSummaryDTO,
     InstrumentDTO,
@@ -107,20 +110,6 @@ def build_part_identity(part):
 
         options=build_part_options(part),
 
-        security_marks=[
-            SecurityMarkDTO(
-                uuid=str(mark.uuid),
-                mark_type=mark.mark_type,
-                value=mark.value,
-                location=mark.location,
-                description=mark.description,
-            )
-            for mark in part.security_marks.all()
-            # seules les gravures réellement faites sont exposées au client
-            # (filtre en Python pour conserver le prefetch, sans requête en plus)
-            if mark.status == "confirmed"
-        ],
-
         history=[
             PartHistoryDTO(
                 uuid=str(history.uuid),
@@ -130,7 +119,7 @@ def build_part_identity(part):
                 created_at=history.created_at.isoformat(),
                 created_by=(
                     UserSummaryDTO(
-                        uuid=str(history.created_by.uuid),
+                        uuid=str(history.created_by.pk),
                         name=history.created_by.get_full_name(),
                     )
                     if history.created_by
@@ -138,33 +127,36 @@ def build_part_identity(part):
                 ),
             )
             for history in part.history.all()
+            # where the hidden code is engraved stays in the workshop
+            if not is_private_event(history.title)
         ],
     )
 
 
 def build_part_options(part):
+    """Options the part was made with. The production snapshot gives {id, name, value} for each one
+    (older snapshots gave {uuid, option: {...}, value})."""
     snapshot = part.production_snapshot or {}
 
-    return [
-        PartOptionSelectionDTO(
-            uuid=item["uuid"],
-            option=OptionDTO(
-                uuid=item["option"]["uuid"],
-                name=item["option"]["name"],
-                description=item["option"].get("description"),
-                category=item["option"].get("category"),
-            ),
-            value=item["value"],
+    options = []
+    for item in snapshot.get("options", []):
+        option = item.get("option") if isinstance(item.get("option"), dict) else {}
+        options.append(
+            PartOptionSelectionDTO(
+                uuid=str(item.get("uuid") or item.get("id") or ""),
+                option=OptionDTO(
+                    uuid=str(option.get("uuid") or item.get("id") or ""),
+                    name=option.get("name") or item.get("name", ""),
+                    description=option.get("description"),
+                    category=option.get("category"),
+                ),
+                value=item.get("value", ""),
+            )
         )
-        for item in snapshot.get("options", [])
-    ]
+    return options
 
 def build_instrument(instrument):
-    parts = getattr(
-        instrument,
-        "parts_for_verification",
-        [],
-    )
+    parts = instrument.instrument_parts.all()
 
     return InstrumentDTO(
         uuid=str(instrument.uuid),
@@ -181,16 +173,15 @@ def build_instrument(instrument):
             ),
         ),
 
-        serial_number=getattr(
-            instrument,
-            "serial_number",
-            None,
-        ),
+        # an instrument carries the serial number of its master piece
+        serial_number=instrument.master_part.serial_number,
 
         parts=[
             build_instrument_part(part)
             for part in parts
         ],
+
+        equipment=[EquipmentDTO(**row) for row in EquipmentService.public(instrument)],
 
         history=[
             InstrumentHistoryDTO(
@@ -201,7 +192,7 @@ def build_instrument(instrument):
                 created_at=history.created_at.isoformat(),
                 created_by=(
                     UserSummaryDTO(
-                        uuid=str(history.created_by.uuid),
+                        uuid=str(history.created_by.pk),
                         name=history.created_by.get_full_name(),
                     )
                     if history.created_by
@@ -209,6 +200,7 @@ def build_instrument(instrument):
                 ),
             )
             for history in instrument.history.all()
+            if not is_private_event(history.title)
         ],
     )
 
@@ -246,13 +238,17 @@ def get_part_for_verification(serial_number: str):
             "batch",
 
             "instrument",
+            "instrument__master_part",
             "instrument__instrument_model",
             "instrument__instrument_model__instrument_type",
         )
         .prefetch_related(
 
-            # Security marks de la pièce
-            "security_marks",
+            # Équipement monté sur l'instrument (mécaniques, micros…)
+            Prefetch(
+                "instrument__equipment",
+                queryset=InstrumentEquipment.objects.filter(removed_at__isnull=True),
+            ),
 
             # History de la pièce
             Prefetch(
@@ -284,17 +280,7 @@ def get_part_for_verification(serial_number: str):
                         "part_model__part_type",
                         "batch",
                     )
-                    .prefetch_related(
-                        "security_marks",
-                        Prefetch(
-                            "history",
-                            queryset=(
-                                PartHistory.objects
-                                .select_related("created_by")
-                                .order_by("-created_at")
-                            ),
-                        ),
-                    )
+                    .order_by("-is_master", "created_at")
                 ),
             ),
         )

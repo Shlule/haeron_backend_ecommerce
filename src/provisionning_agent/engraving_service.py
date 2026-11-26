@@ -6,26 +6,42 @@ pour le NFC.
 from collections import defaultdict
 
 from django.db import transaction
+from django.db.models import Exists, F, OuterRef
 from django.utils import timezone
 
 from haeron_guitar_api.models import EngravingTemplate, Part, PartEngravingMark
+from haeron_guitar_api.production.hidden_mark_service import pick_location
+from haeron_guitar_api.security import hidden_mark
+
+
+def _slot(part_id, mark_type, location):
+    """One mark per part and place ; the hidden code, whose place is drawn at random, once per part."""
+    return (part_id, mark_type, None if mark_type == "security" else location)
 
 
 class EngravingService:
 
     @staticmethod
     def compute_mark_value(part: Part, template: EngravingTemplate) -> str:
-        """
-        PLACEHOLDER pour mark_type="security" : à remplacer par le vrai calcul
-        (payload signé, format spécifique, etc.) avant mise en prod.
-        """
+        """Value kept with the mark. The hidden code (mark_type="security") is not kept : it is computed
+        from Vault only when it is sent to the engraving agent (see engraving_value)."""
         if template.mark_type == "serial_number":
             return part.serial_number
 
         if template.mark_type == "security":
-            return f"SEC-{part.uuid.hex[:12].upper()}"
+            return ""
 
         raise ValueError(f"Pas de règle de calcul pour mark_type={template.mark_type!r}")
+
+    @staticmethod
+    def engraving_value(mark: PartEngravingMark, keys: dict) -> str:
+        """What the agent engraves. keys : the Vault keys already read during this fetch, by part model."""
+        if mark.mark_type != "security":
+            return mark.value
+        part = mark.part
+        if part.part_model_id not in keys:
+            keys[part.part_model_id] = hidden_mark.domain_key(part.part_model_id)
+        return hidden_mark.code_from_key(part.serial_number, keys[part.part_model_id])
 
     @staticmethod
     def find_parts_missing_mark(template: EngravingTemplate):
@@ -34,13 +50,19 @@ class EngravingService:
         if template.part_model_id:
             parts_qs = parts_qs.filter(part_model_id=template.part_model_id)
 
-        parts_qs = parts_qs.exclude(
-            security_marks__mark_type=template.mark_type,
-            security_marks__location=template.location,
-            security_marks__status__in=["pending", "confirmed"],
+        # Exists plutôt que exclude(security_marks__a=..., security_marks__b=...) :
+        # sur une relation multi-valuée, les conditions d'un même exclude() ne
+        # portent pas forcément sur la MÊME marque, ce qui exclut à tort une pièce
+        # ayant par ex. une marque "failed" ici et une "confirmed" ailleurs.
+        active_mark = PartEngravingMark.objects.filter(
+            part=OuterRef("pk"),
+            mark_type=template.mark_type,
+            status__in=["pending", "confirmed"],
         )
-
-        return parts_qs
+        # the hidden code is engraved once per part, at a place drawn at random among the template's places
+        if template.mark_type != "security":
+            active_mark = active_mark.filter(location=template.location)
+        return parts_qs.exclude(Exists(active_mark)).order_by("serial_number")
 
     @classmethod
     @transaction.atomic
@@ -49,17 +71,27 @@ class EngravingService:
         Réserve les pièces à graver et retourne le tout groupé par template
         (un groupe = un CSV LightBurn côté agent).
 
+        `limit` est un plafond GLOBAL (tous templates confondus) sur le nombre
+        de marques renvoyées, marques déjà pending comprises.
+
         Requêtes SQL : 1 (templates) + 1 (toutes les marques déjà pending, tous
         templates confondus) + 1 par template pour trouver les pièces manquantes
         (inévitable : le critère d'exclusion — mark_type/location/part_model —
         diffère par template) + 1 bulk_create global pour toutes les nouvelles
         marques, tous templates confondus.
-        Soit 3 + N_templates requêtes, contre 1 + 3×N_templates avant.
         """
-        templates_qs = EngravingTemplate.objects.all()
+        # templates spécifiques à un modèle de pièce d'abord : si un template
+        # "tous modèles" vise le même emplacement, c'est le spécifique qui gagne
+        templates_qs = EngravingTemplate.objects.order_by(F("part_model").asc(nulls_last=True), "name")
         if mark_type:
             templates_qs = templates_qs.filter(mark_type=mark_type)
-        templates = list(templates_qs)  # 1 requête
+        else:
+            # the hidden code only goes to the agent when asked for (--mark-type security) : it is usually engraved
+            # from the back-office, and every code sent is kept on the engraving workstation
+            templates_qs = templates_qs.exclude(mark_type="security")
+        # verrou sur les templates : deux fetch simultanés (deux postes) sont
+        # sérialisés au lieu de se disputer les mêmes pièces
+        templates = list(templates_qs.select_for_update())  # 1 requête
 
         if not templates:
             return {}
@@ -67,45 +99,56 @@ class EngravingService:
         # 1 seule requête pour récupérer les marques pending de TOUS les templates
         existing_pending_qs = PartEngravingMark.objects.filter(
             template__in=templates, status="pending",
-        ).select_related("part", "template")
+        ).select_related("part", "template").order_by("part__serial_number")
         if part_model_uuid:
             existing_pending_qs = existing_pending_qs.filter(part__part_model_id=part_model_uuid)
 
         existing_by_template_pk = defaultdict(list)
+        # (part, mark_type, location) déjà occupés : miroir en mémoire de la
+        # contrainte uniq_active_mark_per_part_location, pour que deux templates
+        # qui se recouvrent (ex. "tous modèles" + un modèle précis, même
+        # emplacement) ne créent pas deux marques pour la même pièce dans ce
+        # fetch -> sinon IntegrityError au bulk_create et fetch en 500.
+        taken = set()
         for mark in existing_pending_qs:  # évalue la requête ici, une seule fois
             existing_by_template_pk[mark.template_id].append(mark)
+            taken.add(_slot(mark.part_id, mark.mark_type, mark.location))
 
         grouped = defaultdict(list)
         all_new_marks = []
+        remaining = limit - len(taken) if limit else None
 
         for template in templates:
-            existing = existing_by_template_pk.get(template.pk, [])
-            grouped[template].extend(existing)
+            grouped[template].extend(existing_by_template_pk.get(template.pk, []))
 
-            already_reserved_part_ids = {m.part_id for m in existing}
+            if remaining is not None and remaining <= 0:
+                continue
+
             parts_qs = cls.find_parts_missing_mark(template)
             if part_model_uuid:
                 parts_qs = parts_qs.filter(part_model_id=part_model_uuid)
-            parts_qs = parts_qs.exclude(uuid__in=already_reserved_part_ids)
 
-            if limit:
-                remaining = limit - len(existing)
-                if remaining <= 0:
+            for part in parts_qs.iterator():  # 1 requête par template, critère d'exclusion propre au template
+                key = _slot(part.pk, template.mark_type, template.location)
+                if key in taken:
                     continue
-                parts_qs = parts_qs[:remaining]
+                if remaining is not None and remaining <= 0:
+                    break
 
-            for part in parts_qs:  # 1 requête par template, critère d'exclusion propre au template
                 value = cls.compute_mark_value(part, template)
                 mark = PartEngravingMark(
                     part=part,
                     mark_type=template.mark_type,
                     template=template,
                     value=value,
-                    location=template.location,
+                    location=pick_location(template) if template.mark_type == "security" else template.location,
                     status="pending",
                 )
+                taken.add(key)
                 all_new_marks.append(mark)
                 grouped[template].append(mark)
+                if remaining is not None:
+                    remaining -= 1
 
         if all_new_marks:
             # 1 seule requête d'insertion pour toutes les nouvelles marques,
@@ -162,4 +205,4 @@ class EngravingService:
         if to_update:
             PartEngravingMark.objects.bulk_update(to_update, ["status", "description", "confirmed_at"])
 
-        return outcomes
+        return outcomes
