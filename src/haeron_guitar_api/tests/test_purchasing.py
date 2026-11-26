@@ -164,3 +164,31 @@ def test_a_new_supplier_is_typed_in_the_invoice(staff, catalogue):  # noqa: F811
     assert Supplier.objects.filter(name__iexact="gotoh europe").count() == 1
     missing = {**data, "supplierName": " "}
     assert "tape son nom" in run(CREATE, staff, data=missing).errors[0].message
+
+
+SAVE_ITEM = "mutation ($id: UUID, $data: BoStockItemInput!) { backoffice { saveStockItem(itemId: $id, data: $data) } }"
+
+
+def test_an_article_is_created_with_a_new_supplier_and_its_stock(staff, catalogue):  # noqa: F811
+    def save(**data):
+        item_id = data.pop("id", None)
+        result = run(SAVE_ITEM, staff, id=item_id, data=data)
+        return result.errors[0].message if result.errors else result.data["backoffice"]["saveStockItem"]
+
+    sheet = save(name="Sélecteur Schaller", reference="M", family="sélecteurs", supplierName="Schaller",
+                 initialQuantity="2", initialZone="workshop", initialUnitCost="18.5")
+    assert (sheet["supplier"], sheet["family"], sheet["unit"], sheet["isActive"]) == ("Schaller", "Sélecteurs", "pièce", True)
+    assert (sheet["workshop"], sheet["averageCost"], sheet["value"]) == (2.0, 18.5, 37.0)
+    assert sheet["movements"][0]["note"] == "Stock de départ"
+    # the family is written as the one already there ; the same article twice is refused
+    other = save(name="Micro P90", family="micros")
+    assert other["family"] == "Micros"
+    assert "existe déjà" in save(name="sélecteur schaller", reference="m")
+    # changed : the supplier typed again is found, not doubled
+    changed = save(id=sheet["id"], name="Sélecteur Schaller 3 positions", reference="M", supplierName="schaller", alertQuantity="1")
+    assert (changed["name"], changed["supplier"], changed["alertQuantity"]) == ("Sélecteur Schaller 3 positions", "Schaller", 1.0)
+    assert Supplier.objects.filter(name__iexact="schaller").count() == 1
+    # a correction without cost does not change the average cost
+    run(MOVE, staff, data={"stockItemId": sheet["id"], "kind": "adjustment", "quantity": "2"})
+    assert run("query ($id: UUID!) { backoffice { stockItemSheet(itemId: $id) } }", staff, id=sheet["id"]).data[
+        "backoffice"]["stockItemSheet"]["averageCost"] == 18.5

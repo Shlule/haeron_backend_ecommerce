@@ -507,6 +507,26 @@ class BoStockMoveInput:
     zone: str = "workshop"
     instrument_id: Optional[uuid.UUID] = None
     note: str = ""
+    # positive inventory correction : cost of the stock entered without an invoice (empty : average cost)
+    unit_cost: Optional[decimal.Decimal] = None
+
+
+@strawberry.input
+class BoStockItemInput:
+    name: str
+    reference: str = ""
+    family: str = ""
+    # chosen supplier, or a new one typed by its name (none : both empty)
+    supplier_id: Optional[uuid.UUID] = None
+    supplier_name: str = ""
+    unit: str = "pièce"
+    alert_quantity: Optional[decimal.Decimal] = None
+    is_active: bool = True
+    notes: str = ""
+    # new article only : stock already there, entered without an invoice
+    initial_quantity: Optional[decimal.Decimal] = None
+    initial_zone: str = "workshop"
+    initial_unit_cost: Optional[decimal.Decimal] = None
 
 
 def _purchasing_form() -> JSON:
@@ -547,6 +567,11 @@ def _instrument_stock_parts(instrument_id: uuid.UUID) -> JSON:
     return StockService.instrument_cost(instrument_id)
 
 
+def _save_stock_item(info: strawberry.Info, data: BoStockItemInput, item_id: Optional[uuid.UUID] = None) -> JSON:
+    payload = strawberry.asdict(data)
+    return _production(lambda: StockService.save_item(item_id, payload, _staff_user(info)))
+
+
 def _move_stock(info: strawberry.Info, data: BoStockMoveInput) -> JSON:
     payload = strawberry.asdict(data)
     return _production(lambda: StockService.move(payload, _staff_user(info)))
@@ -568,6 +593,7 @@ _mutation_fields["delete_purchase_invoice"] = strawberry.mutation(
     resolver=_delete_purchase_invoice, permission_classes=_finance_permissions
 )
 _mutation_fields["move_stock"] = strawberry.mutation(resolver=_move_stock)
+_mutation_fields["save_stock_item"] = strawberry.mutation(resolver=_save_stock_item)
 
 
 # business partners : code or link with a discount, commission on what the customers paid, payouts

@@ -88,8 +88,11 @@ def _invoice_row(invoice):
 
 
 def average_costs(item_ids=None):
-    """Weighted average purchase cost (HT) of each item."""
-    purchases = StockMovement.objects.filter(kind="purchase", quantity__gt=0)
+    """Weighted average purchase cost (HT) of each item : its purchases, and the stock entered by hand with its cost
+    (stock already there before the first invoice)."""
+    purchases = StockMovement.objects.filter(
+        Q(kind="purchase") | Q(kind="adjustment", unit_cost__gt=0), quantity__gt=0
+    )
     if item_ids is not None:
         purchases = purchases.filter(stock_item_id__in=item_ids)
     totals = defaultdict(lambda: [ZERO, ZERO])
@@ -392,6 +395,7 @@ class StockService:
         )
         return {
             **row,
+            "supplierId": str(item.supplier_id) if item.supplier_id else None,
             "notes": item.notes,
             "alertQuantity": _number(item.alert_quantity),
             "movements": [
@@ -447,6 +451,11 @@ class StockService:
                 f"Stock insuffisant en {ZONE_LABELS[zone]} : {_number(available)} {item.unit} disponible(s)."
             )
         cost = average_costs([item.uuid]).get(item.uuid, ZERO)
+        if kind == "adjustment" and quantity > 0 and data.get("unit_cost") not in (None, ""):
+            # stock entered without an invoice (already there, given...) : its cost when known
+            cost = _decimal(data["unit_cost"], "Coût unitaire")
+            if cost < 0:
+                raise ValidationError("Le coût unitaire ne peut pas être négatif.")
         common = {
             "stock_item": item,
             "kind": kind,
@@ -462,6 +471,68 @@ class StockService:
             StockMovement.objects.create(zone=to_zone, quantity=quantity, **common)
         else:
             StockMovement.objects.create(zone=zone, quantity=-out, instrument=instrument, **common)
+        return StockService.item_sheet(item.uuid)
+
+    @staticmethod
+    @transaction.atomic
+    def save_item(item_id, data, user=None):
+        """Creates or changes a bought article. The supplier is chosen, or typed to create it ; a new article can
+        come with the stock already there (quantity, zone and unit cost, without invoice)."""
+        item = None
+        if item_id:
+            item = StockItem.objects.select_for_update().filter(pk=item_id).first()
+            if item is None:
+                raise ValidationError("Article introuvable.")
+        name = " ".join((data.get("name") or "").split())
+        if not name:
+            raise ValidationError("Le nom de l'article est obligatoire.")
+        reference = (data.get("reference") or "").strip()[:100]
+        same = StockItem.objects.filter(name__iexact=name, reference__iexact=reference)
+        if item is not None:
+            same = same.exclude(pk=item.pk)
+        if same.exists():
+            raise ValidationError(f"L'article « {name} »{f' ({reference})' if reference else ''} existe déjà.")
+        supplier = None
+        if data.get("supplier_id") or (data.get("supplier_name") or "").strip():
+            supplier = _supplier(data)
+        family = " ".join((data.get("family") or "").split())[:60]
+        if family:
+            # same spelling as an existing family (Micros, micros...) : one family, not two
+            existing = StockItem.objects.filter(family__iexact=family).values_list("family", flat=True).first()
+            family = existing or family[:1].upper() + family[1:]
+        alert = _decimal(data.get("alert_quantity") or 0, "Seuil d'alerte")
+        if alert < 0:
+            raise ValidationError("Le seuil d'alerte ne peut pas être négatif.")
+        values = {
+            "name": name[:150],
+            "reference": reference,
+            "family": family,
+            "supplier": supplier,
+            "unit": (data.get("unit") or "pièce").strip()[:20] or "pièce",
+            "alert_quantity": alert,
+            "is_active": data.get("is_active", True) is not False,
+            "notes": (data.get("notes") or "").strip(),
+        }
+        if item is None:
+            item = StockItem.objects.create(**values)
+            if data.get("initial_quantity"):
+                if _decimal(data["initial_quantity"], "Stock de départ") <= 0:
+                    raise ValidationError("Le stock de départ doit être positif.")
+                StockService.move(
+                    {
+                        "stock_item_id": item.uuid,
+                        "kind": "adjustment",
+                        "zone": data.get("initial_zone") or "workshop",
+                        "quantity": data["initial_quantity"],
+                        "unit_cost": data.get("initial_unit_cost"),
+                        "note": "Stock de départ",
+                    },
+                    user,
+                )
+        else:
+            for field, value in values.items():
+                setattr(item, field, value)
+            item.save()
         return StockService.item_sheet(item.uuid)
 
     @staticmethod
