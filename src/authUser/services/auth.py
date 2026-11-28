@@ -4,6 +4,7 @@ from ..services.mfa.mfa_policy import get_mfa_status
 from ..services.mfa.mfa_challenge import create_mfa_challenge
 from ..services.mfa.mfa_states import MFAStatus
 from .tokens import generate_tokens
+from . import attempts
 from authUser.models import User
 
 
@@ -28,10 +29,15 @@ def authenticate_user(identifier, password):
     except User.DoesNotExist:
         return None
 
+    key = f"login_failed:{user.pk}"
+    attempts.check(key)
+
     user = authenticate(username=user.username, password=password)
 
     if not user:
+        attempts.failed(key)
         return None
+    attempts.reset(key)
 
     if not user.emailaddress_set.filter(verified=True).exists():
         raise ValueError("please verified Email")

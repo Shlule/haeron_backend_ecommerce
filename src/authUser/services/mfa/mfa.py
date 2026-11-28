@@ -2,6 +2,7 @@ from authUser.models import User
 from allauth.mfa.models import Authenticator
 from .mfa_challenge import get_user_from_challenge, delete_challenge
 from ..tokens import generate_tokens
+from .. import attempts
 from allauth.mfa.adapter import get_adapter
 import pyotp
 from django.core.cache import cache
@@ -55,10 +56,14 @@ def verify_totp(user, code):
     authenticator = get_user_totp(user)
     if not authenticator:
         raise Exception("MFA not configured")
+    key = f"mfa_failed:{user.pk}"
+    attempts.check(key)
     adapter = get_adapter()
     secret = adapter.decrypt(authenticator.data["secret"])
     if not pyotp.TOTP(secret).verify(code, valid_window=1):
+        attempts.failed(key)
         raise Exception("Invalid MFA code")
+    attempts.reset(key)
     return True
 
 
